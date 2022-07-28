@@ -725,6 +725,9 @@ class LayoutGenerator():
 
     def scaleLastLayoutToExpectedCoverage(self, expected_real_coverage):
         last_layout = self.state_log.getLastLayoutName()
+        if self.state_log.getLayoutScanDirection(last_layout) == 'remove':
+            return None, None
+
         last_pebs = self.state_log.getPebsCoverage(last_layout)
         last_real = self.state_log.getRealCoverage(last_layout)
 
@@ -747,7 +750,6 @@ class LayoutGenerator():
 
 
     def tryToConcludeNextCoverage(self, base_layout, expected_real_coverage, scan_direction, scan_order):
-
         desired_coverage, new_base_layout = self.scaleLastLayoutToExpectedCoverage(expected_real_coverage)
         if desired_coverage is not None:
             return desired_coverage, new_base_layout
@@ -771,17 +773,18 @@ class LayoutGenerator():
                 base_layout = layout
             return desired_coverage, base_layout
 
-        for l in query['layout']:
-            pages = LayoutGeneratorUtils.getLayoutHugepages(l, self.exp_dir)
-            # check if one pages set is included in the other
-            common_pages = set(pages) & set(base_layout_pages)
-            if common_pages == set(pages) or common_pages == set(base_layout_pages):
-                selected_layouts.append(l)
-        # add the right/left layouts if the current scan range
         if scan_direction == 'add':
+            for l in query['layout']:
+                pages = LayoutGeneratorUtils.getLayoutHugepages(l, self.exp_dir)
+                # check if one pages set is included in the other
+                common_pages = set(pages) & set(base_layout_pages)
+                if common_pages == set(pages) or common_pages == set(base_layout_pages):
+                    selected_layouts.append(l)
+            # add the right/left layouts if the current scan range
             selected_layouts.append(self.state_log.getRightLayoutName())
         else:
-            selected_layouts.append(self.state_log.getLeftLayoutName())
+            # when removing consider all relevant layouts
+            selected_layouts = query['layout'].to_list()
 
         # keep only the previous selected layouts
         query = self.state_log.df.query(f'layout in {selected_layouts}')
@@ -1055,6 +1058,7 @@ class LayoutGenerator():
         done = done or self.createLayoutUsingScanMethod(last_scan_method)
         done = done or self.createLayoutUsingScanMethod('add')
         done = done or self.createLayoutUsingScanMethod('remove')
+        done = done or self.createLayoutUsingScanMethod('add_round2')
         done = done or self.createLayoutUsingScanMethod('auto')
 
         assert done, 'cannot create next layout...'
@@ -1086,10 +1090,11 @@ class LayoutGenerator():
             '''
             done = done or self.createLayout('add', 'tail', gamma)
             done = done or self.createLayout('add', 'tail', U)
-            done = done or self.createLayout('add', 'head', gamma)
-            done = done or self.createLayout('add', 'head', U)
         elif scan_method == 'remove':
             done = done or self.createLayout('remove', 'tail', beta)
+        elif scan_method == 'add_round2':
+            done = done or self.createLayout('add', 'head', gamma)
+            done = done or self.createLayout('add', 'head', U)
         elif scan_method == 'auto':
             done = done or self.createLayout('auto', 'blind', None)
         else:
