@@ -19,13 +19,15 @@ HEAD_PAGES_WEIGHT_THRESHOLD = 5.0
 DEFAULT_INCREMENT = 2 * MAX_GAP
 
 class LayoutGenerator():
-    def __init__(self, pebs_df, results_df, layout, exp_dir):
+    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget):
         self.pebs_df = pebs_df
         self.results_df = results_df
         self.layout = layout
         self.exp_dir = exp_dir
-        self.subgroups_log = SubgroupsLog(exp_dir, results_df)
+        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget)
         self.state_log = None
+        self.max_gap = max_gap
+        self.max_budget = max_budget
 
     def generateLayout(self):
         if self.layout == 'layout1':
@@ -188,7 +190,9 @@ class LayoutGenerator():
             self.state_log = StateLog(self.exp_dir,
                                       self.results_df,
                                       right_layout,
-                                      left_layout)
+                                      left_layout,
+                                      self.max_gap,
+                                      self.max_budget)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
             self.updateStateLog(right, left)
@@ -247,7 +251,8 @@ class LayoutGenerator():
 
         self.state_log = StateLog(self.exp_dir,
                                     self.results_df,
-                                    right['layout'], left['layout'])
+                                    right['layout'], left['layout'],
+                                    self.max_gap, self.max_budget)
         self.updateStateLog(right, left)
         self.improveMaxGapFurthermore()
         return False
