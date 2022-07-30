@@ -16,7 +16,6 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__))+'/../../analysis')
 from performance_statistics import PerformanceStatistics
 
 HEAD_PAGES_WEIGHT_THRESHOLD = 5.0
-DEFAULT_INCREMENT = 2 * MAX_GAP
 
 class LayoutGenerator():
     def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget):
@@ -27,6 +26,7 @@ class LayoutGenerator():
         self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget)
         self.state_log = None
         self.max_gap = max_gap
+        self.default_increment = 2 * max_gap
         self.max_budget = max_budget
 
     def generateLayout(self):
@@ -896,7 +896,7 @@ class LayoutGenerator():
                 scan_order = 'blind'
             else:
                 # update desired_pebs_coverage since we jumped too far
-                desired_pebs_coverage = min((last_pebs_coverage + 100) / 2, last_pebs_coverage + DEFAULT_INCREMENT)
+                desired_pebs_coverage = min((last_pebs_coverage + 100) / 2, last_pebs_coverage + self.default_incrementg)
 
         return scan_direction, scan_order, desired_pebs_coverage
 
@@ -924,12 +924,12 @@ class LayoutGenerator():
             elif scan_order == 'tail':
                 right_layout = self.state_log.getRightLayoutName()
                 base_layout = right_layout
-                desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(right_layout, expected_real_coverage, scan_direction, scan_order) + DEFAULT_INCREMENT
+                desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(right_layout, expected_real_coverage, scan_direction, scan_order) + self.default_incrementg
             elif scan_order == 'head':
                 right_layout = self.state_log.getRightLayoutName()
                 left_layout = self.state_log.getLeftLayoutName()
                 base_layout = right_layout
-                #desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(left_layout, expected_real_coverage, scan_direction, scan_order) + DEFAULT_INCREMENT
+                #desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(left_layout, expected_real_coverage, scan_direction, scan_order) + self.default_incrementg
                 desired_pebs_coverage = self.state_log.getPebsCoverage(left_layout)
             else:
                 assert False,f'unrecognized scan-order={scan_order} for add scan method'
@@ -941,7 +941,7 @@ class LayoutGenerator():
 
         base_layout_pebs_coverage = self.state_log.getPebsCoverage(base_layout)
         if desired_pebs_coverage < base_layout_pebs_coverage:
-            desired_pebs_coverage = base_layout_pebs_coverage + MAX_GAP
+            desired_pebs_coverage = base_layout_pebs_coverage + self.max_gap
         return desired_pebs_coverage, base_layout
 
     def getRemoveScanParameters(self, base_layout, expected_real_coverage, scan_direction, scan_order):
@@ -992,9 +992,9 @@ class LayoutGenerator():
         pebs_delta = abs(last_pebs - base_pebs)
         real_delta = abs(last_real - base_real)
 
-        if pebs_delta < 1 and real_delta > DEFAULT_INCREMENT:
+        if pebs_delta < 1 and real_delta > self.default_incrementg:
             return 'tail'
-        elif real_delta < 1 and pebs_delta > DEFAULT_INCREMENT:
+        elif real_delta < 1 and pebs_delta > self.default_incrementg:
             return 'head'
         else:
             return self.state_log.getLayoutScanOrder(last_layout)

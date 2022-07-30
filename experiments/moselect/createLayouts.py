@@ -7,7 +7,7 @@ def parseArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--memory_footprint', default='memory_footprint.txt')
     parser.add_argument('-p', '--pebs_mem_bins', default='mem_bins_2mb.csv')
-    parser.add_argument('-b', '--max_budget', default=50)
+    parser.add_argument('-b', '--max_budget', type=int, default=50)
     parser.add_argument('-l', '--layout', required=True)
     parser.add_argument('-d', '--exp_dir', required=True)
     parser.add_argument('-n', '--results_file', required=True)
