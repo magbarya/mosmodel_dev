@@ -896,7 +896,7 @@ class LayoutGenerator():
                 scan_order = 'blind'
             else:
                 # update desired_pebs_coverage since we jumped too far
-                desired_pebs_coverage = min((last_pebs_coverage + 100) / 2, last_pebs_coverage + self.default_incrementg)
+                desired_pebs_coverage = min((last_pebs_coverage + 100) / 2, last_pebs_coverage + self.default_increment)
 
         return scan_direction, scan_order, desired_pebs_coverage
 
@@ -924,12 +924,12 @@ class LayoutGenerator():
             elif scan_order == 'tail':
                 right_layout = self.state_log.getRightLayoutName()
                 base_layout = right_layout
-                desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(right_layout, expected_real_coverage, scan_direction, scan_order) + self.default_incrementg
+                desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(right_layout, expected_real_coverage, scan_direction, scan_order) + self.default_increment
             elif scan_order == 'head':
                 right_layout = self.state_log.getRightLayoutName()
                 left_layout = self.state_log.getLeftLayoutName()
                 base_layout = right_layout
-                #desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(left_layout, expected_real_coverage, scan_direction, scan_order) + self.default_incrementg
+                #desired_pebs_coverage = self.realToPebsCoverageBasedOnExistingLayout(left_layout, expected_real_coverage, scan_direction, scan_order) + self.default_increment
                 desired_pebs_coverage = self.state_log.getPebsCoverage(left_layout)
             else:
                 assert False,f'unrecognized scan-order={scan_order} for add scan method'
@@ -992,9 +992,9 @@ class LayoutGenerator():
         pebs_delta = abs(last_pebs - base_pebs)
         real_delta = abs(last_real - base_real)
 
-        if pebs_delta < 1 and real_delta > self.default_incrementg:
+        if pebs_delta < 1 and real_delta > self.default_increment:
             return 'tail'
-        elif real_delta < 1 and pebs_delta > self.default_incrementg:
+        elif real_delta < 1 and pebs_delta > self.default_increment:
             return 'head'
         else:
             return self.state_log.getLayoutScanOrder(last_layout)
