@@ -3,6 +3,7 @@ SUBMODULES := \
 	single_page_size \
 	growing_window_2m \
 	random_window_2m \
+	extra_random_2m \
 	sliding_window \
 	linear_models_coeffs \
 	pebs_tlb_miss_trace \

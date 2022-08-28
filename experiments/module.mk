@@ -10,6 +10,7 @@ SUBMODULES := \
 	runtime_range \
 	growing_window_2m \
 	random_window_2m \
+	extra_random_2m \
 	sliding_window \
 	subgroups_windows \
 	subgroups_uniformly_windows \
