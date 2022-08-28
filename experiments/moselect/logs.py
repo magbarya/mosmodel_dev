@@ -4,10 +4,6 @@ import pandas as pd
 from ast import literal_eval
 import os.path
 
-MAX_GAP = 4
-MAX_TRIALS = 50
-EXPECTED_INCREMENT = MAX_GAP - 0.5
-
 class Singleton(type):
     _instances = {}
 
@@ -22,10 +18,13 @@ class Log():
 
     def __init__(self,
                  exp_dir, results_df, log_name,
+                 max_gap, max_budget,
                  default_columns, converters=None):
         self.exp_dir = exp_dir
         self.results_df = results_df
         self.log_file = self.exp_dir + '/' + log_name
+        self.max_gap = max_gap
+        self.max_budget = max_budget
         self.default_columns = default_columns
         self.df = self.readLog(converters)
 
@@ -111,11 +110,11 @@ class Log():
 
 
 class SubgroupsLog(Log, metaclass=Singleton):
-    def __init__(self, exp_dir, results_df):
+    def __init__(self, exp_dir, results_df, max_gap, max_budget):
         default_columns = [
             'layout', 'total_budget', 'remaining_budget',
             'pebs_coverage', 'real_coverage', 'walk_cycles']
-        super().__init__(exp_dir, results_df, 'subgroups.log', default_columns)
+        super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, default_columns)
 
     def addRecord(self,
                   layout, pebs_coverage, writeLog=False):
@@ -140,7 +139,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
         self.df = self.df.sort_values('walk_cycles', ascending=False)
 
     def getExtraBudget(self):
-        return MAX_TRIALS - (self.getTotalBudget() + len(self.df))
+        return self.max_budget - (self.getTotalBudget() + len(self.df))
 
     def calculateBudget(self):
         query = self.df.query('real_coverage == (-1)')
@@ -154,13 +153,13 @@ class SubgroupsLog(Log, metaclass=Singleton):
         # (call it delta[i] for the diff between group[i] and group[i+1])
         self.df['delta'] = self.df['real_coverage'].diff().abs()
         self.df['delta'] = self.df['delta'].fillna(0)
-        total_deltas = self.df.query(f'delta > {MAX_GAP}')['delta'].sum()
+        total_deltas = self.df.query(f'delta > {self.max_gap}')['delta'].sum()
         # budgest = 50-9: num_layouts(50) - subgroups_layouts(9)
-        total_budgets = MAX_TRIALS - len(self.df)
+        total_budgets = self.max_budget - len(self.df)
         for index, row in self.df.iterrows():
             delta = row['delta']
-            # for each delta < MAX_GAP assign budget=0
-            if delta <= MAX_GAP:
+            # for each delta < self.max_gap assign budget=0
+            if delta <= self.max_gap:
                 budget = 0
             else:
                 budget = int((delta / total_deltas) * total_budgets)
@@ -209,7 +208,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
 
 class StateLog(Log):
-    def __init__(self, exp_dir, results_df, right_layout, left_layout):
+    def __init__(self, exp_dir, results_df, right_layout, left_layout, max_gap, max_budget):
         default_columns = [
             'layout', 'scan_base', 'increment_base',
             'scan_direction', 'scan_order', 'scan_value',
@@ -220,7 +219,9 @@ class StateLog(Log):
         self.left_layout = left_layout
         state_name = right_layout + '_' + left_layout
         super().__init__(exp_dir, results_df,
-                         state_name + '_state.log', default_columns)
+                         state_name + '_state.log',
+                         max_gap, max_budget,
+                         default_columns)
         super().writeRealCoverage()
         self.pages_log_name = self.exp_dir + '/layout_pages.log'
         if not os.path.isfile(self.pages_log_name):
@@ -371,7 +372,7 @@ class StateLog(Log):
         current_coverage = start_layout_coverage
         current_layout = start_layout
         for index, row in df.iterrows():
-            if row['real_coverage'] <= (current_coverage + MAX_GAP):
+            if row['real_coverage'] <= (current_coverage + self.max_gap):
                 current_layout = row['layout']
                 current_coverage = row['real_coverage']
                 if current_coverage >= max_coverage:
@@ -381,14 +382,16 @@ class StateLog(Log):
         return current_layout
 
     def getNextExpectedRealCoverage(self):
+        expected_increment = (7.0/8.0) * self.max_gap
+
         next_increment = self.getNextIncrementBase()
         inc_real_coverage = self.getRealCoverage(next_increment)
-        max_expected_real = inc_real_coverage + 2 * EXPECTED_INCREMENT
+        max_expected_real = inc_real_coverage + 2 * expected_increment
 
         df = self.df.query(f'{inc_real_coverage} < real_coverage <= {max_expected_real}')
 
         if len(df) == 0:
-            return inc_real_coverage + EXPECTED_INCREMENT
+            return inc_real_coverage + expected_increment
 
         df = df.sort_values('real_coverage')
         upper_real_coverage = df.iloc[0]['real_coverage']
