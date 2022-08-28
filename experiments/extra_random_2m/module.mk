@@ -1,4 +1,4 @@
-MODULE_NAME := analysis/extra_random_2m
+MODULE_NAME := experiments/extra_random_2m
 
 EXTRA_EXPS_NUM_LAYOUTS := 46
 NUM_LAYOUTS := $(EXTRA_EXPS_NUM_LAYOUTS)
