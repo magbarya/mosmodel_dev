@@ -8,7 +8,7 @@ $(MODULE_NAME): $(EXTRA_DATA_MEAN_FILE)
 
 MODEL_EXPERIMENTS := growing_window_2m sliding_window/window_20 sliding_window/window_40 sliding_window/window_60 sliding_window/window_80 random_window_2m extra_random_2m
 
-RESULT_MEAN_FILES := $(addprefix $(ROOT_DIR)/results/,$(MODEL_EXPERIMENTS))
+RESULT_MEAN_FILES := $(addprefix results/,$(MODEL_EXPERIMENTS))
 RESULT_MEAN_FILES := $(addsuffix /mean.csv,$(RESULT_MEAN_FILES))
 
 RESULT_MEAN_FILES_LIST := $(call array_to_comma_separated,$(RESULT_MEAN_FILES)) 
