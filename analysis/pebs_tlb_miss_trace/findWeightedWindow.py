@@ -114,7 +114,7 @@ header ='#[page_number],[num_pages],[window_accesses_weight],[pool-start-byte],[
 header += str.format('window-start,window-length,window-weight,left-side-weight,right-side-weight,{0}-start,{0}-length', args.pool)
 window_info = ''
 
-weights = [0.8, 0.6, 0.5, 0.4, 0.3, 0.2]
+weights = [0.9, 0.8, 0.7, 0.6, 0.5, 0.4, 0.3, 0.2, 0.1]
 for w in weights:
     max_access_start_page, max_access_length, left_weight, right_weight = findWeightedWindow(w)
     window_info += str.format('{0},{1},{2},{3},{4},{5},{6}',

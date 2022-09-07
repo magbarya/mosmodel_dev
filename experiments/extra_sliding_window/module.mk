@@ -1,5 +1,5 @@
 EXTRA_SLIDING_WINDOW_MODULE_NAME := experiments/extra_sliding_window
-EXTRA_HOT_REGION_FILE := $(EXTRA_SLIDING_WINDOW_MODULE_NAME)/hot_region.txt
+HOT_REGION_FILE := $(EXTRA_SLIDING_WINDOW_MODULE_NAME)/hot_region.txt
 EXTRA_SLIDING_WINDOW_WEIGHTS := 50 70 90
 
 define extra_sliding-makefiles
