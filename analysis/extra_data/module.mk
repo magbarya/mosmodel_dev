@@ -6,7 +6,7 @@ EXTRA_DATA_MEAN_FILE := $(MODULE_NAME)/mean.csv
 
 $(MODULE_NAME): $(EXTRA_DATA_MEAN_FILE)
 
-MODEL_EXPERIMENTS := sliding_window/window_50 sliding_window/window_70 sliding_window/window_90 extra_random_window_2m manual
+MODEL_EXPERIMENTS := extra_sliding_window/window_50 extra_sliding_window/window_70 extra_sliding_window/window_90 extra_random_window_2m manual
 
 RESULT_MEAN_FILES := $(addprefix results/,$(MODEL_EXPERIMENTS))
 RESULT_MEAN_FILES := $(addsuffix /mean.csv,$(RESULT_MEAN_FILES))
