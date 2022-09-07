@@ -1,4 +1,4 @@
-MODULE_NAME := analysis/extra_random_2m
+MODULE_NAME := analysis/manual
 SUBMODULES := 
 
 include $(COMMON_ANALYSIS_MAKEFILE)

@@ -4,7 +4,9 @@ SUBMODULES := \
 	growing_window_2m \
 	random_window_2m \
 	sliding_window \
-	extra_random_2m \
+	extra_sliding_window \
+	extra_random_window_2m \
+	manual \
 	linear_models_coeffs \
 	pebs_tlb_miss_trace \
 	subgroups_windows \
