@@ -181,7 +181,6 @@ class LayoutsGenerator:
             end_offset = (start_offset + window_length)
             page_size = 2*mb
             if self._use_1gb_pages:
-                end_offset = round_up(end_offset, gb)
                 self.addSingleWindowLayout(brk_start_1g=start_offset, brk_end_1g=end_offset)
             else:
                 self.addSingleWindowLayout(brk_start_2m=start_offset, brk_end_2m=end_offset)
