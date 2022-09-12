@@ -145,8 +145,6 @@ class LayoutsGenerator:
     def buildSlidingWindowLayouts(self, hot_region_start, hot_region_length):
         standard_page_size = 4*kb
         window_page_size = 2*mb
-        if self._use_1gb_pages:
-            window_page_size = 1*gb
 
         window_start = round_down(hot_region_start, standard_page_size)
         raw_window_length = round_up(hot_region_length, standard_page_size)
@@ -177,13 +175,20 @@ class LayoutsGenerator:
         step_size = math.floor(raw_window_length / (self._num_layouts-1))
         step_size = round_up(step_size, 4*kb)
 
+        if self._use_1gb_pages:
+            start_1gb_offset = ((self._num_layouts - 1) * step_size) + start_offset + window_length
+            end_1gb_offset = round_up(brk_footprint - start_1gb_offset, 1*gb) + start_1gb_offset
+            brk_footprint = end_1gb_offset
+
         for i in range(0, self._num_layouts):
             end_offset = (start_offset + window_length)
             page_size = 2*mb
+
             if self._use_1gb_pages:
-                self.addSingleWindowLayout(brk_start_1g=start_offset, brk_end_1g=end_offset)
+                self.addSingleWindowLayout(brk_start_2m=start_offset, brk_end_2m=end_offset, brk_start_1g=start_1gb_offset, brk_end_1g=end_1gb_offset)
             else:
                 self.addSingleWindowLayout(brk_start_2m=start_offset, brk_end_2m=end_offset)
+
             start_offset += step_size
 
     def exportLayouts(self, output):
