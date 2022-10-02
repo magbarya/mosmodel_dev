@@ -529,6 +529,10 @@ class LayoutGenerator():
             factor = max(factor, 2)
 
         pages, pebs_coverage = self.addPagesByFactor(left, right, factor)
+        if pages is None or self.pagesSetExist(pages):
+            expected_real_coverage = (self.state_log.getRealCoverage(right) + self.state_log.getRealCoverage(left)) / 2
+            pages, pebs_coverage = self.removePagesBasedOnRealCoverage(left, expected_real_coverage)
+
         return pages, pebs_coverage, base_layout, inc_layout, factor
 
     def addPagesToBasePages(self, base_layout_pages, add_working_set, remove_working_set, desired_pebs_coverage, tail=True):
