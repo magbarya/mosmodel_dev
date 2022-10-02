@@ -178,12 +178,20 @@ class SubgroupsLog(Log, metaclass=Singleton):
         self.df.loc[self.df['layout'] == layout, 'remaining_budget'] = self.df.loc[self.df['layout'] == layout, 'remaining_budget']-1
         self.writeLog()
 
+    def zeroAllBudgets(self):
+        remaining = 0
+        for index, row in self.df.iterrows():
+            layout = row['layout']
+            remaining += self.zeroBudget(layout)
+        return remaining
+
     def zeroBudget(self, layout):
         total = self.getField(layout, 'total_budget')
         remaining = self.getField(layout, 'remaining_budget')
         self.df.loc[self.df['layout'] == layout, 'total_budget'] = total - remaining
         self.df.loc[self.df['layout'] == layout, 'remaining_budget'] = 0
         self.writeLog()
+        return remaining
 
     def addExtraBudget(self, layout, extra_budget):
         self.df.loc[self.df['layout'] == layout, 'remaining_budget'] = self.df.loc[self.df['layout'] == layout, 'remaining_budget']+extra_budget
@@ -199,6 +207,9 @@ class SubgroupsLog(Log, metaclass=Singleton):
         self.writeRealCoverage()
         df = self.df.sort_values('walk_cycles', ascending=True)
         return df.iloc[0]
+
+    def getRemainingBudget(self, left_layout):
+        return self.getField(left_layout, 'remaining_budget')
 
     def getTotalRemainingBudget(self):
         return self.df['remaining_budget'].sum()
@@ -398,8 +409,6 @@ class StateLog(Log):
         avg_real_coverage = (inc_real_coverage + upper_real_coverage) / 2
         return avg_real_coverage
 
-
-
     def getMaxGapLayouts(self):
         left_coverage = self.getRealCoverage(self.getLeftLayoutName())
         right_coverage = self.getRealCoverage(self.getRightLayoutName())
@@ -412,3 +421,8 @@ class StateLog(Log):
         right = diffs.iloc[idx-1]
         left = diffs.iloc[idx]
         return right['layout'], left['layout']
+
+    def getMaxGap(self):
+        right, left = self.getMaxGapLayouts()
+        return abs(self.getRealCoverage(left) - self.getRealCoverage(right))
+
