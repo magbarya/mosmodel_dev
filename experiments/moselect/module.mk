@@ -20,6 +20,7 @@ $(LAYOUT_FILES): $(MOSELECT_EXPERIMENT)/layouts/%.csv: $(MEMORY_FOOTPRINT_FILE) 
 		--memory_footprint=$(MEMORY_FOOTPRINT_FILE) \
 		--pebs_mem_bins=$(MEM_BINS_2MB_CSV_FILE) \
 		--layout=$* \
+		--max_budget=$(MOSELECT_NUM_LAYOUTS) \
 		--exp_dir=$(dir $@)/.. \
 		--results_file=$(MOSELECT_RESULTS)/median.csv
 

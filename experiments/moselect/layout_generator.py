@@ -18,16 +18,16 @@ from performance_statistics import PerformanceStatistics
 HEAD_PAGES_WEIGHT_THRESHOLD = 5.0
 
 class LayoutGenerator():
-    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap=4, default_num_layouts=50):
+    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget):
         self.pebs_df = pebs_df
         self.results_df = results_df
         self.layout = layout
         self.exp_dir = exp_dir
-        self.max_gap = max_gap
-        self.default_num_layouts = default_num_layouts
-        self.default_increment = 2 * max_gap
-        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, default_num_layouts)
+        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget)
         self.state_log = None
+        self.max_gap = max_gap
+        self.default_increment = 2 * max_gap
+        self.max_budget = max_budget
 
     def generateLayout(self):
         if self.layout == 'layout1':
@@ -193,7 +193,7 @@ class LayoutGenerator():
                                       right_layout,
                                       left_layout,
                                       self.max_gap,
-                                      self.default_num_layouts)
+                                      self.max_budget)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
             self.updateStateLog(right, left)
@@ -216,7 +216,7 @@ class LayoutGenerator():
                                       right_layout,
                                       left_layout,
                                       self.max_gap,
-                                      self.default_num_layouts)
+                                      self.max_budget)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
             self.updateStateLog(right, left)
@@ -286,8 +286,7 @@ class LayoutGenerator():
         self.state_log = StateLog(self.exp_dir,
                                     self.results_df,
                                     right['layout'], left['layout'],
-                                    self.max_gap,
-                                    self.default_num_layouts)
+                                    self.max_gap, self.max_budget)
         self.updateStateLog(right, left)
         self.improveMaxGapFurthermore()
         return False
@@ -765,6 +764,9 @@ class LayoutGenerator():
 
     def scaleLastLayoutToExpectedCoverage(self, expected_real_coverage):
         last_layout = self.state_log.getLastLayoutName()
+        if self.state_log.getLayoutScanDirection(last_layout) == 'remove':
+            return None, None
+
         last_pebs = self.state_log.getPebsCoverage(last_layout)
         last_real = self.state_log.getRealCoverage(last_layout)
 
@@ -787,7 +789,6 @@ class LayoutGenerator():
 
 
     def tryToConcludeNextCoverage(self, base_layout, expected_real_coverage, scan_direction, scan_order):
-
         desired_coverage, new_base_layout = self.scaleLastLayoutToExpectedCoverage(expected_real_coverage)
         if desired_coverage is not None:
             return desired_coverage, new_base_layout
@@ -811,17 +812,18 @@ class LayoutGenerator():
                 base_layout = layout
             return desired_coverage, base_layout
 
-        for l in query['layout']:
-            pages = LayoutGeneratorUtils.getLayoutHugepages(l, self.exp_dir)
-            # check if one pages set is included in the other
-            common_pages = set(pages) & set(base_layout_pages)
-            if common_pages == set(pages) or common_pages == set(base_layout_pages):
-                selected_layouts.append(l)
-        # add the right/left layouts if the current scan range
         if scan_direction == 'add':
+            for l in query['layout']:
+                pages = LayoutGeneratorUtils.getLayoutHugepages(l, self.exp_dir)
+                # check if one pages set is included in the other
+                common_pages = set(pages) & set(base_layout_pages)
+                if common_pages == set(pages) or common_pages == set(base_layout_pages):
+                    selected_layouts.append(l)
+            # add the right/left layouts if the current scan range
             selected_layouts.append(self.state_log.getRightLayoutName())
         else:
-            selected_layouts.append(self.state_log.getLeftLayoutName())
+            # when removing consider all relevant layouts
+            selected_layouts = query['layout'].to_list()
 
         # keep only the previous selected layouts
         query = self.state_log.df.query(f'layout in {selected_layouts}')
@@ -977,15 +979,6 @@ class LayoutGenerator():
         return desired_pebs_coverage, base_layout
 
     def getRemoveScanParameters(self, base_layout, expected_real_coverage, scan_direction, scan_order):
-        last_layout = self.state_log.getLastLayoutName()
-        last_real = self.state_log.getRealCoverage(last_layout)
-        if last_real > expected_real_coverage:
-            last_pebs = self.state_log.getPebsCoverage(last_layout)
-            base_layout = last_layout
-            desired_pebs_coverage = last_pebs - (last_real - expected_real_coverage)
-            if desired_pebs_coverage > 0:
-                return desired_pebs_coverage, base_layout
-
         predicted_coverage, base_layout = self.tryToConcludeNextCoverage(base_layout, expected_real_coverage, scan_direction, scan_order)
         left_layout = self.state_log.getLeftLayoutName()
         if predicted_coverage is None and base_layout != left_layout:
@@ -993,6 +986,16 @@ class LayoutGenerator():
             predicted_coverage, base_layout = self.tryToConcludeNextCoverage(base_layout, expected_real_coverage, scan_direction, scan_order)
 
         if predicted_coverage is None:
+            last_layout = self.state_log.getLastLayoutName()
+            last_real = self.state_log.getRealCoverage(last_layout)
+            last_scan_direction = self.state_log.getLayoutScanDirection(last_layout)
+            if last_scan_direction == 'remove' and last_real > expected_real_coverage:
+                last_pebs = self.state_log.getPebsCoverage(last_layout)
+                base_layout = last_layout
+                desired_pebs_coverage = last_pebs - (last_real - expected_real_coverage)
+                if desired_pebs_coverage > 0:
+                    return desired_pebs_coverage, base_layout
+
             pebs_to_real = self.state_log.getPebsCoverage(base_layout) / self.state_log.getRealCoverage(base_layout)
             desired_pebs_coverage = pebs_to_real * expected_real_coverage
             print(f'[DEBUG]: looking for pebs-coverage: {desired_pebs_coverage} to get real-coverage: {expected_real_coverage}')
@@ -1104,6 +1107,7 @@ class LayoutGenerator():
         done = done or self.createLayoutUsingScanMethod(last_scan_method)
         done = done or self.createLayoutUsingScanMethod('add')
         done = done or self.createLayoutUsingScanMethod('remove')
+        done = done or self.createLayoutUsingScanMethod('add_round2')
         done = done or self.createLayoutUsingScanMethod('auto')
 
         assert done, 'cannot create next layout...'
@@ -1135,10 +1139,11 @@ class LayoutGenerator():
             '''
             done = done or self.createLayout('add', 'tail', gamma)
             done = done or self.createLayout('add', 'tail', U)
-            done = done or self.createLayout('add', 'head', gamma)
-            done = done or self.createLayout('add', 'head', U)
         elif scan_method == 'remove':
             done = done or self.createLayout('remove', 'tail', beta)
+        elif scan_method == 'add_round2':
+            done = done or self.createLayout('add', 'head', gamma)
+            done = done or self.createLayout('add', 'head', U)
         elif scan_method == 'auto':
             done = done or self.createLayout('auto', 'blind', None)
         else:

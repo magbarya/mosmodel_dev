@@ -4,6 +4,7 @@ SUBMODULES := \
 	growing_window_2m \
 	random_window_2m \
 	sliding_window \
+	extra_random_2m \
 	linear_models_coeffs \
 	pebs_tlb_miss_trace \
 	subgroups_windows \
@@ -17,6 +18,7 @@ SUBMODULES := \
 	genetic_scan \
 	smart_genetic_scan \
 	mosmodel \
+	extra_data \
 	all_data
 SUBMODULES := $(addprefix $(MODULE_NAME)/,$(SUBMODULES))
 
