@@ -248,6 +248,7 @@ class LayoutGenerator():
                 print('===========================================================')
                 print(f'[DEBUG] ++++ closed all gaps for all subgroups ++++')
                 print('===========================================================')
+                return False
             max_gap, state_log = self.getSubgroupWithMaximalGap()
             self.state_log = state_log
             print('===========================================================')
@@ -261,15 +262,13 @@ class LayoutGenerator():
                 remaining_budget = 1
             self.subgroups_log.addExtraBudget(state_log.getLeftLayoutName(), remaining_budget)
         self.state_log = state_log
+        return True
 
     def updateLogs(self):
         self.updateSubgroupsLog()
 
-        self.initStateLogForNextSungroupToProcess()
-        # TODO: how to utilize the additional layouts after closing all gaps?
-        # by closing gaps in the subgroup with maximal gap
-        # or by scanning all layouts as one big-group and close the maximal gap
-        return True
+        if self.initStateLogForNextSungroupToProcess():
+            return True
 
         # could not fins subgroup that has some gaps to be closed
         # then move to minimize the max gap
