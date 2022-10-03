@@ -7,6 +7,7 @@ def parseArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--memory_footprint', default='memory_footprint.txt')
     parser.add_argument('-p', '--pebs_mem_bins', default='mem_bins_2mb.csv')
+    parser.add_argument('-g', '--max_gap', type=int, default=4)
     parser.add_argument('-b', '--max_budget', type=int, default=50)
     parser.add_argument('-l', '--layout', required=True)
     parser.add_argument('-d', '--exp_dir', required=True)
@@ -27,6 +28,5 @@ if __name__ == "__main__":
 
     pebs_df = LayoutGeneratorUtils.normalizePebsAccesses(args.pebs_mem_bins)
 
-    max_gap = 200 / args.max_budget
-    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, max_gap, args.max_budget)
+    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, args.max_gap, args.max_budget)
     layout_generator.generateLayout()
