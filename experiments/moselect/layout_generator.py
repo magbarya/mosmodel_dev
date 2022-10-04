@@ -1158,12 +1158,13 @@ class LayoutGenerator():
             done = done or self.createLayout('add', 'head', U)
         elif scan_method == 'auto':
             done = done or self.createLayout('auto', 'blind', None)
+            if not done:
+                self.improveMaxGapFurthermore()
+                done = True
         else:
             done = self.createLayoutUsingScanMethod()
 
         return done
-
-
 
     def createLayout(self, current_direction, current_order, main_working_set, secondary_working_set=None):
         # keep going with the same last scan method
