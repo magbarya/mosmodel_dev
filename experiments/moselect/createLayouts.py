@@ -10,8 +10,9 @@ def parseArguments():
     parser.add_argument('-g', '--max_gap', type=int, default=4)
     parser.add_argument('-b', '--max_budget', type=int, default=50)
     parser.add_argument('-l', '--layout', required=True)
-    parser.add_argument('-d', '--exp_dir', required=True)
-    parser.add_argument('-n', '--results_file', required=True)
+    parser.add_argument('-e', '--exp_dir', required=True)
+    parser.add_argument('-r', '--results_file', required=True)
+    parser.add_argument('-d', '--debug', action='store_true')
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -28,5 +29,5 @@ if __name__ == "__main__":
 
     pebs_df = LayoutGeneratorUtils.normalizePebsAccesses(args.pebs_mem_bins)
 
-    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, args.max_gap, args.max_budget)
+    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, args.max_gap, args.max_budget, args.debug)
     layout_generator.generateLayout()

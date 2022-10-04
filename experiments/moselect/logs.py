@@ -18,7 +18,7 @@ class Log():
 
     def __init__(self,
                  exp_dir, results_df, log_name,
-                 max_gap, max_budget,
+                 max_gap, max_budget, dry_run,
                  default_columns, converters=None):
         self.exp_dir = exp_dir
         self.results_df = results_df
@@ -27,6 +27,7 @@ class Log():
         self.max_budget = max_budget
         self.default_columns = default_columns
         self.df = self.readLog(converters)
+        self.dry_run = dry_run
 
     def readLog(self, converters=None):
         if not os.path.isfile(self.log_file):
@@ -36,10 +37,12 @@ class Log():
         return self.df
 
     def writeLog(self):
-        self.df.to_csv(self.log_file, index=False)
+        if not self.dry_run:
+            self.df.to_csv(self.log_file, index=False)
 
     def clear(self):
-        self.df = pd.DataFrame(columns=self.default_columns)
+        if not self.dry_run:
+            self.df = pd.DataFrame(columns=self.default_columns)
 
     def empty(self):
         return self.df.empty
@@ -110,11 +113,11 @@ class Log():
 
 
 class SubgroupsLog(Log, metaclass=Singleton):
-    def __init__(self, exp_dir, results_df, max_gap, max_budget):
+    def __init__(self, exp_dir, results_df, max_gap, max_budget, dry_run):
         default_columns = [
             'layout', 'total_budget', 'remaining_budget',
             'pebs_coverage', 'real_coverage', 'walk_cycles']
-        super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, default_columns)
+        super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, dry_run, default_columns)
 
     def addRecord(self,
                   layout, pebs_coverage, writeLog=False):
@@ -219,7 +222,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
 
 class StateLog(Log):
-    def __init__(self, exp_dir, results_df, right_layout, left_layout, max_gap, max_budget):
+    def __init__(self, exp_dir, results_df, right_layout, left_layout, max_gap, max_budget, dry_run):
         default_columns = [
             'layout', 'scan_base', 'increment_base',
             'scan_direction', 'scan_order', 'scan_value',
@@ -231,7 +234,7 @@ class StateLog(Log):
         state_name = right_layout + '_' + left_layout
         super().__init__(exp_dir, results_df,
                          state_name + '_state.log',
-                         max_gap, max_budget,
+                         max_gap, max_budget, dry_run,
                          default_columns)
         super().writeRealCoverage()
         self.pages_log_name = self.exp_dir + '/layout_pages.log'
@@ -278,7 +281,8 @@ class StateLog(Log):
                 'added_pages': added_pages,
                 'pages': pages
                 }, ignore_index=True)
-            self.pages_df.to_csv(self.pages_log_name, index=False)
+            if not self.dry_run:
+                self.pages_df.to_csv(self.pages_log_name, index=False)
 
     def getLayoutPages(self, layout):
         pages = self.pages_df.loc[self.pages_df['layout'] == layout, 'pages'].iloc[0]
@@ -409,10 +413,13 @@ class StateLog(Log):
         avg_real_coverage = (inc_real_coverage + upper_real_coverage) / 2
         return avg_real_coverage
 
-    def getMaxGapLayouts(self):
+    def getMaxGapLayouts(self, include_other_layouts=True):
         left_coverage = self.getRealCoverage(self.getLeftLayoutName())
         right_coverage = self.getRealCoverage(self.getRightLayoutName())
-        query = self.df.query(f'{right_coverage} <= real_coverage <= {left_coverage}')
+        if include_other_layouts:
+            query = self.df.query(f'{right_coverage} <= real_coverage <= {left_coverage}')
+        else:
+            query = self.df.query(f'{right_coverage} <= real_coverage <= {left_coverage} and scan_base != "other"')
         diffs = query.sort_values('real_coverage', ascending=True)
         diffs['diff'] = diffs['real_coverage'].diff().abs()
 

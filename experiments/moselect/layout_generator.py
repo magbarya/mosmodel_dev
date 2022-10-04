@@ -18,16 +18,17 @@ from performance_statistics import PerformanceStatistics
 HEAD_PAGES_WEIGHT_THRESHOLD = 5.0
 
 class LayoutGenerator():
-    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget):
+    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget, debug):
         self.pebs_df = pebs_df
         self.results_df = results_df
         self.layout = layout
         self.exp_dir = exp_dir
-        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget)
+        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget, debug)
         self.state_log = None
         self.max_gap = max_gap
         self.default_increment = 2 * max_gap
         self.max_budget = max_budget
+        self.debug = debug
 
     def generateLayout(self):
         if self.layout == 'layout1':
@@ -83,9 +84,15 @@ class LayoutGenerator():
                 buckets_weights[selected_index] -= weight
         return group
 
-    def writeLayout(self, layout_number, pages):
+    def writeLayoutAll2mb(self, layout_name, output):
+        if not self.debug:
+            print(layout_name)
+            print('weight: 100%')
+            print('hugepages: all pages')
+            LayoutGeneratorUtils.writeLayoutAll2mb(layout_name, output)
+
+    def writeLayout(self, layout_name, pages):
         total_pages = len(self.pebs_df)
-        layout_name = f'layout{layout_number}'
         pebs_coverage = LayoutGeneratorUtils.calculateTlbCoverage(self.pebs_df, pages)
         print(layout_name)
         pages_ratio=round(len(pages)/total_pages * 100)
@@ -93,8 +100,9 @@ class LayoutGenerator():
         print(f'weight: {pebs_coverage}')
         print(f'hugepages: {pages}')
         print('---------------------------------------------')
-        LayoutGeneratorUtils.writeLayout(layout_name, pages, self.exp_dir)
-        return layout_name, pebs_coverage
+        if not self.debug:
+            LayoutGeneratorUtils.writeLayout(layout_name, pages, self.exp_dir)
+        return pebs_coverage
 
     def createSubgroups(self, group):
         i = 1
@@ -102,15 +110,13 @@ class LayoutGenerator():
         for subset_size in range(len(group)+1):
             for subset in itertools.combinations(group, subset_size):
                 subset_pages = list(itertools.chain(*subset))
-                layout_name, pebs_coverage = self.writeLayout(i, subset_pages)
+                layout_name = f'layout{i}'
+                pebs_coverage = self.writeLayout(layout_name, subset_pages)
                 i += 1
                 self.subgroups_log.addRecord(layout_name, pebs_coverage)
         # 1.1.3. create additional layout in which all pages are backed with 2MB
         layout_name = f'layout{i}'
-        print(layout_name)
-        print('weight: 100%')
-        print('hugepages: all pages')
-        LayoutGeneratorUtils.writeLayoutAll2mb(layout_name, self.exp_dir)
+        self.writeLayoutAll2mb(layout_name, self.exp_dir)
         self.subgroups_log.addRecord(layout_name, 100)
         self.subgroups_log.writeLog()
 
@@ -146,7 +152,8 @@ class LayoutGenerator():
         layout_number = start_layout_number
         for subset in itertools.combinations(pages_group, 2):
             subset_pages = list(itertools.chain(*subset))
-            layout_name, pebs_coverage = self.writeLayout(layout_number, subset_pages)
+            layout_name = f'layout{layout_number}'
+            pebs_coverage = self.writeLayout(layout_name, subset_pages)
             layout_number += 1
             self.subgroups_log.addRecord(layout_name, pebs_coverage)
         self.subgroups_log.writeLog()
@@ -193,7 +200,8 @@ class LayoutGenerator():
                                       right_layout,
                                       left_layout,
                                       self.max_gap,
-                                      self.max_budget)
+                                      self.max_budget,
+                                      self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
             self.updateStateLog(right, left)
@@ -216,7 +224,8 @@ class LayoutGenerator():
                                       right_layout,
                                       left_layout,
                                       self.max_gap,
-                                      self.max_budget)
+                                      self.max_budget,
+                                      self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
             self.updateStateLog(right, left)
@@ -285,7 +294,7 @@ class LayoutGenerator():
         self.state_log = StateLog(self.exp_dir,
                                     self.results_df,
                                     right['layout'], left['layout'],
-                                    self.max_gap, self.max_budget)
+                                    self.max_gap, self.max_budget, self.debug)
         self.updateStateLog(right, left)
         self.improveMaxGapFurthermore()
         return False
@@ -316,7 +325,7 @@ class LayoutGenerator():
             pages, pebs_coverage = self.removePagesBasedOnRealCoverage(left, expected_real_coverage)
 
         assert pages is not None
-        LayoutGeneratorUtils.writeLayout(self.layout, pages, self.exp_dir)
+        self.writeLayout(self.layout, pages)
         self.state_log.addRecord(self.layout, 'reduce-max', 'auto',
                                  factor, base_layout,
                                  pebs_coverage, expected_real_coverage,
@@ -512,7 +521,7 @@ class LayoutGenerator():
 
     def addPagesFromLeftLayout(self):
         last_layout = self.state_log.getLastLayoutName()
-        right, left = self.state_log.getMaxGapLayouts()
+        right, left = self.state_log.getMaxGapLayouts(False)
         print(f'[DEBUG]: addPagesFromLeftLayout: trying to close max gap between {right} and {left} by adding pages from {left} to {right} blindly')
 
         base_layout = left
@@ -1217,7 +1226,7 @@ class LayoutGenerator():
                                  pebs_coverage, expected_real_coverage,
                                  increment_base, pages)
         # write the layout configuration file
-        LayoutGeneratorUtils.writeLayout(self.layout, pages, self.exp_dir)
+        self.writeLayout(self.layout, pages)
         # decrease current group's budget by 1
         self.subgroups_log.decreaseRemainingBudget(
             self.state_log.getLeftLayoutName())
