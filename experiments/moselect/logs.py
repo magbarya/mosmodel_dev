@@ -431,5 +431,9 @@ class StateLog(Log):
 
     def getMaxGap(self):
         right, left = self.getMaxGapLayouts()
-        return abs(self.getRealCoverage(left) - self.getRealCoverage(right))
+        max_gap = abs(self.getRealCoverage(left) - self.getRealCoverage(right))
+        print(f'=========> the maximal gap was found between: {right} - {left}, which is: {max_gap:.2f} <=========')
+        return max_gap
 
+    def getAllLayouts(self):
+        return self.df['layout'].to_list()
