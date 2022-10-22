@@ -30,7 +30,6 @@ class LayoutGenerator():
         self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget, debug)
         self.all_layouts = self.getAllLayoutsFromStateLogs()
         self.state_log = None
-        self.all_2mb_layout = None
     def generateLayout(self):
         if self.layout == 'layout1':
             # 1.1. create nine layouts statically (using PEBS output):
@@ -90,7 +89,6 @@ class LayoutGenerator():
             print(layout_name)
             print('weight: 100%')
             print('hugepages: all pages')
-            self.all_2mb_layout = layout_name
             LayoutGeneratorUtils.writeLayoutAll2mb(layout_name, output)
 
     def writeLayout(self, layout_name, pages):
@@ -347,11 +345,49 @@ class LayoutGenerator():
 
         return mixed_pages, mixed_coverage
 
+    def moveToAnotherStateLog(self, right, left):
+        right_layout = right['layout']
+        left_layout = left['layout']
+        print(f'[DEBUG]: Moving to use a new state log: {left_layout} - {right_layout}')
+        # define a new state-log that contains all layouts in all subgroups
+        self.state_log = StateLog(self.exp_dir,
+                                    self.results_df,
+                                    right_layout, left_layout,
+                                    self.max_gap, self.max_budget, self.debug)
+        self.updateStateLog(right, left)
+
+
     def autoReduceMaximalGap(self):
-        #self.autoReduceMaximalGapByCoverage()
-        return self.autoReduceMaximalGapByFactor()
+        base_layout, inc_base, factor, pages, pebs_coverage = self.autoReduceMaximalGapByFactor()
+        if pages is None or self.pagesSetExist(pages):
+            base_layout, inc_base, factor, pages, pebs_coverage = self.autoReduceMaximalGapByCoverage()
+        if pages is None or self.pagesSetExist(pages):
+            base_layout, inc_base, factor, pages, pebs_coverage = self.removePagesRecursively()
+        assert pages is not None
+        expected_real_coverage = (self.state_log.getRealCoverage(base_layout) + self.state_log.getRealCoverage(inc_base)) / 2
+        self.writeLayout(self.layout, pages)
+        self.state_log.addRecord(self.layout, 'auto', 'reduce-max',
+                                 factor, base_layout,
+                                 pebs_coverage, expected_real_coverage,
+                                 inc_base, pages)
+        # decrease current group's budget by 1
+        self.subgroups_log.decreaseRemainingBudget(
+            self.state_log.getLeftLayoutName())
+        return True
+
 
     def autoReduceMaximalGapByFactor(self):
+        right, left = self.state_log.getMaxGapLayouts()
+        # if the left layout is with 100 pebs coverage but it's not
+        # the all-2MB layout, then move to use the all-2MB layout instead
+        # (which has more hugepages for sure)
+        left_pebs = self.state_log.getPebsCoverage(left)
+        left_real = self.state_log.getRealCoverage(left)
+        if left_pebs >= 99.9 and left_real < 99.9:
+            left = self.subgroups_log.getLeftmostLayout()
+            right = self.state_log.getRecord('layout', right)
+            self.moveToAnotherStateLog(right, left)
+
         print(self.state_log.df)
         right, left = self.state_log.getMaxGapLayouts()
         max_gap = abs(self.state_log.getRealCoverage(right) - self.state_log.getRealCoverage(left))
@@ -389,19 +425,9 @@ class LayoutGenerator():
 
         pages, pebs_coverage = self.mixLayoutPagesByFactor(left, right, factor)
         if pages is None or self.pagesSetExist(pages):
-            return self.autoReduceMaximalGapByCoverage()
-
-        assert pages is not None
-        expected_real_coverage = (self.state_log.getRealCoverage(right) + self.state_log.getRealCoverage(left)) / 2
-        self.writeLayout(self.layout, pages)
-        self.state_log.addRecord(self.layout, 'auto', 'reduce-max',
-                                 factor, base_layout,
-                                 pebs_coverage, expected_real_coverage,
-                                 inc_layout, pages)
-        # decrease current group's budget by 1
-        self.subgroups_log.decreaseRemainingBudget(
-            self.state_log.getLeftLayoutName())
-        return True
+            pages = None
+            pebs_coverage = -1
+        return base_layout, inc_layout, factor, pages, pebs_coverage
 
     def mixLayoutPagesByCoverage(self, left, right, expected_pebs, append_pages_not_in_pebs=True):
         print(f'[DEBUG]: mixLayoutPagesByCoverage - left: {left} , right: {right} , expected_pebs: {expected_pebs}, add-pages-not-in-pebs: {append_pages_not_in_pebs}')
@@ -458,9 +484,7 @@ class LayoutGenerator():
         last_inc = self.state_log.getIncBaseLayout(last_layout)
         last_direction = self.state_log.getLayoutScanDirection(last_layout)
         last_order = self.state_log.getLayoutScanOrder(last_layout)
-        last_scan_value = self.state_log.getLayoutScanValue(last_layout)
         last_pebs_coverage = self.state_log.getPebsCoverage(last_layout)
-        #last_pebs_coverage = last_scan_value
         last_real_coverage = self.state_log.getRealCoverage(last_layout)
         last_expected_real_coverage = self.state_log.getExpectedRealCoverage(last_layout)
 
@@ -479,18 +503,9 @@ class LayoutGenerator():
                 break
 
         if pages is None or self.pagesSetExist(pages):
-            return False
-        expected_real_coverage = (self.state_log.getRealCoverage(right) + self.state_log.getRealCoverage(left)) / 2
-        self.writeLayout(self.layout, pages)
-        self.state_log.addRecord(self.layout, 'auto', 'reduce-max',
-                                 expected_pebs_with_epsilon, base_layout,
-                                 pebs_coverage, expected_real_coverage,
-                                 inc_layout, pages)
-        # decrease current group's budget by 1
-        self.subgroups_log.decreaseRemainingBudget(
-            self.state_log.getLeftLayoutName())
-
-        return True
+            pages = None
+            pebs_coverage = -1
+        return base_layout, inc_layout, 2, pages, pebs_coverage
 
     def updateStateLog(self, right_layout, left_layout):
         # if the state was not created yet then create it and add all
@@ -682,12 +697,6 @@ class LayoutGenerator():
         print(f'[DEBUG]: addPagesFromLeftLayout: trying to close max gap between {right} and {left} by adding pages from {left} to {right} blindly')
 
         base_layout = left
-        # if there is another layout with 100% pebs coverage, then move to use
-        # the all-2MB layout instead (which has more hugepages for sure)
-        base_pebs = self.state_log.getPebsCoverage(base_layout)
-        if base_pebs >= 99.9 and base_layout != self.all_2mb_layout:
-            base_layout = self.all_2mb_layout
-
         inc_layout = right
         last_layout = self.state_log.getLastLayoutName()
         last_base = self.state_log.getBaseLayout(last_layout)
@@ -1336,10 +1345,10 @@ class LayoutGenerator():
         elif scan_method == 'add_round2':
             done = done or self.createLayout('add', 'head', gamma)
             done = done or self.createLayout('add', 'head', U)
-        elif scan_method == 'auto_reduce-max':
-            done = done or self.autoReduceMaximalGap()
         elif scan_method == 'auto_blind':
             done = done or self.createLayout('auto', 'blind', None)
+        elif scan_method == 'auto_reduce-max':
+            done = done or self.autoReduceMaximalGap()
         else:
             done = self.createLayoutUsingScanMethod()
 
