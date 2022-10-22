@@ -30,7 +30,7 @@ class LayoutGenerator():
         self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget, debug)
         self.all_layouts = self.getAllLayoutsFromStateLogs()
         self.state_log = None
-
+        self.all_2mb_layout = None
     def generateLayout(self):
         if self.layout == 'layout1':
             # 1.1. create nine layouts statically (using PEBS output):
@@ -90,6 +90,7 @@ class LayoutGenerator():
             print(layout_name)
             print('weight: 100%')
             print('hugepages: all pages')
+            self.all_2mb_layout = layout_name
             LayoutGeneratorUtils.writeLayoutAll2mb(layout_name, output)
 
     def writeLayout(self, layout_name, pages):
@@ -681,6 +682,12 @@ class LayoutGenerator():
         print(f'[DEBUG]: addPagesFromLeftLayout: trying to close max gap between {right} and {left} by adding pages from {left} to {right} blindly')
 
         base_layout = left
+        # if there is another layout with 100% pebs coverage, then move to use
+        # the all-2MB layout instead (which has more hugepages for sure)
+        base_pebs = self.state_log.getPebsCoverage(base_layout)
+        if base_pebs >= 99.9 and base_layout != self.all_2mb_layout:
+            base_layout = self.all_2mb_layout
+
         inc_layout = right
         last_layout = self.state_log.getLastLayoutName()
         last_base = self.state_log.getBaseLayout(last_layout)
@@ -1112,9 +1119,8 @@ class LayoutGenerator():
         # over-estimated desired_pebs_coverage, then fix it
         left_layout = self.state_log.getLeftLayoutName()
         left_pebs_coverage = self.state_log.getPebsCoverage(left_layout)
-        left_layout_is_all_2MB = left_pebs_coverage >= 99.9
         if desired_pebs_coverage >= 99.9:
-            if left_layout_is_all_2MB:
+            if left_pebs_coverage >= 99.9:
                 # if left layout is the all-2MB layout and we are trying to add
                 # more than 100% coverage (i.e., we still need to add more pages
                 # to close the real-coverage gap but we have no additional pages
