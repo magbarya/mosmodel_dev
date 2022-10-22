@@ -284,7 +284,7 @@ class LayoutGenerator():
 
         extra_budget = self.subgroups_log.getExtraBudget()
         print(f'finished the last group but there is still ({extra_budget}) remaining budget.')
-        print('using the remaining budget to look for previous groups that have more gaps to close')
+        print('using the remaining budget to close remaining gaps in previous groups')
         right = self.subgroups_log.getRightmostLayout()
         left = self.subgroups_log.getLeftmostLayout()
 
@@ -348,7 +348,7 @@ class LayoutGenerator():
 
     def autoReduceMaximalGap(self):
         #self.autoReduceMaximalGapByCoverage()
-        self.autoReduceMaximalGapByFactor()
+        return self.autoReduceMaximalGapByFactor()
 
     def autoReduceMaximalGapByFactor(self):
         print(self.state_log.df)
@@ -388,8 +388,7 @@ class LayoutGenerator():
 
         pages, pebs_coverage = self.mixLayoutPagesByFactor(left, right, factor)
         if pages is None or self.pagesSetExist(pages):
-            self.autoReduceMaximalGapByCoverage()
-            return
+            return self.autoReduceMaximalGapByCoverage()
 
         assert pages is not None
         expected_real_coverage = (self.state_log.getRealCoverage(right) + self.state_log.getRealCoverage(left)) / 2
@@ -401,6 +400,7 @@ class LayoutGenerator():
         # decrease current group's budget by 1
         self.subgroups_log.decreaseRemainingBudget(
             self.state_log.getLeftLayoutName())
+        return True
 
     def mixLayoutPagesByCoverage(self, left, right, expected_pebs, append_pages_not_in_pebs=True):
         print(f'[DEBUG]: mixLayoutPagesByCoverage - left: {left} , right: {right} , expected_pebs: {expected_pebs}, add-pages-not-in-pebs: {append_pages_not_in_pebs}')
@@ -477,8 +477,8 @@ class LayoutGenerator():
             if pages is not None and not self.pagesSetExist(pages):
                 break
 
-        assert not self.pagesSetExist(pages)
-        assert pages is not None
+        if pages is None or self.pagesSetExist(pages):
+            return False
         expected_real_coverage = (self.state_log.getRealCoverage(right) + self.state_log.getRealCoverage(left)) / 2
         self.writeLayout(self.layout, pages)
         self.state_log.addRecord(self.layout, 'auto', 'reduce-max',
@@ -488,6 +488,8 @@ class LayoutGenerator():
         # decrease current group's budget by 1
         self.subgroups_log.decreaseRemainingBudget(
             self.state_log.getLeftLayoutName())
+
+        return True
 
     def updateStateLog(self, right_layout, left_layout):
         # if the state was not created yet then create it and add all
@@ -1301,8 +1303,8 @@ class LayoutGenerator():
         done = done or self.createLayoutUsingScanMethod('add')
         done = done or self.createLayoutUsingScanMethod('remove')
         done = done or self.createLayoutUsingScanMethod('add_round2')
-        #done = done or self.createLayoutUsingScanMethod('auto_blind')
         done = done or self.createLayoutUsingScanMethod('auto_reduce-max')
+        done = done or self.createLayoutUsingScanMethod('auto_blind')
 
         assert done, 'cannot create next layout...'
 
@@ -1328,11 +1330,10 @@ class LayoutGenerator():
         elif scan_method == 'add_round2':
             done = done or self.createLayout('add', 'head', gamma)
             done = done or self.createLayout('add', 'head', U)
+        elif scan_method == 'auto_reduce-max':
+            done = done or self.autoReduceMaximalGap()
         elif scan_method == 'auto_blind':
             done = done or self.createLayout('auto', 'blind', None)
-        elif scan_method == 'auto_reduce-max':
-            self.autoReduceMaximalGap()
-            done = True
         else:
             done = self.createLayoutUsingScanMethod()
 
