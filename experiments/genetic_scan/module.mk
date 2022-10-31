@@ -1,7 +1,8 @@
 MODULE_NAME := experiments/genetic_scan
 GENETIC_SCAN_EXP_DIR := $(MODULE_NAME)
 
-NUM_LAYOUTS := 33
+GENETIC_NUM_LAYOUTS ?= 33
+NUM_LAYOUTS := $(GENETIC_NUM_LAYOUTS)
 undefine LAYOUTS #allow the template to create new layouts based on the new NUM_LAYOUTS
 
 include $(EXPERIMENTS_TEMPLATE)
