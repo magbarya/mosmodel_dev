@@ -26,7 +26,7 @@ def loadDataframe(mean_file):
 
 page_size = 1 << 21
 def writeLayout(layout, windows, start_offset, output):
-    configuration = Configuration(output, layout)
+    configuration = Configuration()
     configuration.setPoolsSize(
             brk_size=brk_footprint,
             file_size=1*gb,
@@ -37,7 +37,7 @@ def writeLayout(layout, windows, start_offset, output):
                 page_size=page_size,
                 start_offset=w * page_size + start_offset,
                 end_offset=(w+1) * page_size + start_offset)
-    configuration.exportToCSV()
+    configuration.exportToCSV(output, layout)
 
 import random
 def combineGenes(father_allele, mother_allele, gene_length):
