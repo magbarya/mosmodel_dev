@@ -28,7 +28,7 @@ page_size = 1 << 21
 def writeLayout(layout, windows, start_offset, output):
     configuration = Configuration()
     configuration.setPoolsSize(
-            brk_size=brk_footprint,
+            brk_size=brk_footprint + start_offset,
             file_size=1*gb,
             mmap_size=mmap_footprint)
     for w in windows:
@@ -40,16 +40,16 @@ def writeLayout(layout, windows, start_offset, output):
     configuration.exportToCSV(output, layout)
 
 import random
-def combineGenes(father_allele, mother_allele, gene_length):
+def combineGenes(parent1_allele, parent2_allele, gene_length):
     gene = []
-    father_set = set(father_allele)
-    mother_set = set(mother_allele)
-    only_in_father = list(father_set - mother_set)
-    only_in_mother = list(mother_set - father_set)
-    in_both = list(father_set & mother_set)
+    parent1_set = set(parent1_allele)
+    parent2_set = set(parent2_allele)
+    only_in_parent1 = list(parent1_set - parent2_set)
+    only_in_parent2 = list(parent2_set - parent1_set)
+    in_both = list(parent1_set & parent2_set)
     gene += in_both
-    gene += only_in_father[0::2]
-    gene += only_in_mother[1::2]
+    gene += only_in_parent1[0::2]
+    gene += only_in_parent2[1::2]
 
     random.seed(len(gene))
     gene_deviation = random.randint(0, 511)
