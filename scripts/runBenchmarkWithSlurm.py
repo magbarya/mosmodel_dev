@@ -17,10 +17,6 @@ def getCommandLineArguments():
             help='list of files to not remove')
     parser.add_argument('-f', '--force', action='store_true', default=False,
             help='run the benchmark anyway even if the output directory already exists')
-    parser.add_argument('-pre', '--pre_run_script', type=str, default='pre_run.sh',
-            help='pre_run.sh script related path to benchmaark_dir')
-    parser.add_argument('-post', '--post_run_script', type=str, default='post_run.sh',
-            help='post_run.sh script related path to benchmaark_dir')
     parser.add_argument('benchmark_dir', type=str, help='the benchmark directory, must contain three \
             bash scripts: pre_run.sh, run.sh, and post_run.sh')
     parser.add_argument('output_dir', type=str, help='the output directory which will be created for \
@@ -39,7 +35,7 @@ if __name__ == "__main__":
             for i in range(args.num_repeats)]
     should_pre_run = any([not run.doesOutputDirectoryExist() for run in repeated_runs])
     if should_pre_run:
-        repeated_runs[0].pre_run(args.pre_run_script) # pre_run only once for all repeats
+        repeated_runs[0].prerun() # pre_run only once for all repeats
 
     for run in repeated_runs: # run for each repeat
         if not run.doesOutputDirectoryExist() or args.force:
@@ -51,7 +47,7 @@ if __name__ == "__main__":
     for run in repeated_runs: # wait, post_run and clean for each repeat
         if not run.doesOutputDirectoryExist():
             run.wait()
-            run.post_run(args.post_run_script)
+            run.postrun()
             run.clean(args.exclude_files)
 
 

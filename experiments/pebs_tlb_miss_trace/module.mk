@@ -15,7 +15,7 @@ $(MODULE_NAME): $(PEBS_TLB_MISS_TRACE_OUTPUT)
 
 $(PEBS_TLB_MISS_TRACE_OUTPUT): experiments/single_page_size/layouts/layout4kb.csv | experiments-prerequisites 
 	$(RUN_BENCHMARK) \
-		--pre_run_script=$(PRE_RUN_SCRIPT_NAME) --post_run_script=$(POST_RUN_SCRIPT_NAME) \
+		--num_threads=$(NUMBER_OF_THREADS) \
 		--exclude_files=$(notdir $@) --submit_command \
 		"$(PERF_MEM_RECORD_CMD) -- $(RUN_MOSALLOC_TOOL) --analyze -cpf $(ROOT_DIR)/experiments/single_page_size/layouts/layout4kb.csv --library $(MOSALLOC_TOOL)" \
 		$(BENCHMARK_PATH) $(dir $@)
