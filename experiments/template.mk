@@ -1,5 +1,6 @@
 DEFAULT_NUM_LAYOUTS ?= 9
 DEFAULT_NUM_OF_REPEATS ?= 4
+NUMBER_OF_THREADS ?= $(NUMBER_OF_CORES_PER_SOCKET)
 
 ifndef NUM_LAYOUTS
 NUM_LAYOUTS := $(DEFAULT_NUM_LAYOUTS)
@@ -55,7 +56,7 @@ endef
 define SLURM_EXPS_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] start producing: $$@ ==========
-	$$(RUN_BENCHMARK_WITH_SLURM) --num_threads=$$(NUMBER_OF_CORES_PER_SOCKET) --num_repeats=$$(NUM_OF_REPEATS) \
+	$$(RUN_BENCHMARK_WITH_SLURM) --num_threads=$$(NUMBER_OF_THREADS) --num_repeats=$$(NUM_OF_REPEATS) \
 		--pre_run_script=$$(PRE_RUN_SCRIPT_NAME) --post_run_script=$$(POST_RUN_SCRIPT_NAME) \
 		--submit_command "$$(MEASURE_GENERAL_METRICS)  \
 		$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC)" -- \
