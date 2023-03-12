@@ -4,6 +4,8 @@ SUBMODULES :=
 BUILD_LINEAR_MODELS_COEFFS := $(ROOT_DIR)/$(MODULE_NAME)/buildLinearModelsCoeffs.py
 LINEAR_MODELS_COEFFS := $(MODULE_NAME)/coeffs.csv
 
+$(MODULE_NAME): $(LINEAR_MODELS_COEFFS)
+
 $(LINEAR_MODELS_COEFFS): results/single_page_size/mean.csv 
 	$(BUILD_LINEAR_MODELS_COEFFS) --mean_file=$< --output=$@
 
