@@ -18,13 +18,14 @@ class Log():
 
     def __init__(self,
                  exp_dir, results_df, log_name,
-                 max_gap, max_budget, dry_run,
-                 default_columns, converters=None):
+                 max_gap, max_budget, metric, 
+                 dry_run, default_columns, converters=None):
         self.exp_dir = exp_dir
         self.results_df = results_df
         self.log_file = self.exp_dir + '/' + log_name
         self.max_gap = max_gap
         self.max_budget = max_budget
+        self.metric = metric
         self.default_columns = default_columns
         self.df = self.readLog(converters)
         self.dry_run = dry_run
@@ -97,27 +98,28 @@ class Log():
             return record.iloc[0]
 
     def writeRealCoverage(self):
-        max_walk_cycles = self.results_df['walk_cycles'].max()
-        min_walk_cycles = self.results_df['walk_cycles'].min()
-        delta_walk_cycles = max_walk_cycles - min_walk_cycles
+        max_metric = self.results_df[self.metric].max()
+        min_metric = self.results_df[self.metric].min()
+        delta_metric = max_metric - min_metric
         self.df['real_coverage'] = self.df['real_coverage'].astype(float)
         query = self.df.query('real_coverage == (-1)')
         for index, row in query.iterrows():
             layout = row['layout']
-            walk_cycles = self.results_df.loc[self.results_df['layout'] == layout, 'walk_cycles'].iloc[0]
-            real_coverage = (max_walk_cycles - walk_cycles) / delta_walk_cycles
+            metric = self.results_df.loc[self.results_df['layout'] == layout, self.metric].iloc[0]
+            real_coverage = (max_metric - metric) / delta_metric
             real_coverage *= 100
             self.df.loc[self.df['layout'] == layout, 'real_coverage'] = real_coverage
-            self.df.loc[self.df['layout'] == layout, 'walk_cycles'] = walk_cycles
+            self.df.loc[self.df['layout'] == layout, self.metric] = metric
         self.writeLog()
 
 
 class SubgroupsLog(Log, metaclass=Singleton):
-    def __init__(self, exp_dir, results_df, max_gap, max_budget, dry_run):
+    def __init__(self, exp_dir, results_df, 
+                 max_gap, max_budget, metric, dry_run):
         default_columns = [
             'layout', 'total_budget', 'remaining_budget',
-            'pebs_coverage', 'real_coverage', 'walk_cycles']
-        super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, dry_run, default_columns)
+            'pebs_coverage', 'real_coverage', self.metric]
+        super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, metric, dry_run, default_columns)
 
     def addRecord(self,
                   layout, pebs_coverage, writeLog=False):
@@ -127,7 +129,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
             'remaining_budget': -1,
             'pebs_coverage': pebs_coverage,
             'real_coverage': -1,
-            'walk_cycles': -1
+            self.metric: -1
             }, ignore_index=True)
         if writeLog:
             self.writeLog()
@@ -139,7 +141,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
     def sortByRealCoverage(self):
         #self.df = self.df.sort_values('real_coverage', ascending=True)
-        self.df = self.df.sort_values('walk_cycles', ascending=False)
+        self.df = self.df.sort_values(self.metric, ascending=False)
 
     def getExtraBudget(self):
         return self.max_budget - (self.getTotalBudget() + len(self.df))
@@ -150,7 +152,7 @@ class SubgroupsLog(Log, metaclass=Singleton):
         query = self.df.query('total_budget < 0')
         if len(query) == 0:
             return
-        # sort the group layouts by walk-cycles/real_coverage
+        # sort the group layouts by metric/real_coverage
         self.sortByRealCoverage()
         # calculate the diff between each two adjacent layouts
         # (call it delta[i] for the diff between group[i] and group[i+1])
@@ -203,12 +205,12 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
     def getRightmostLayout(self):
         self.writeRealCoverage()
-        df = self.df.sort_values('walk_cycles', ascending=False)
+        df = self.df.sort_values(self.metric, ascending=False)
         return df.iloc[0]
 
     def getLeftmostLayout(self):
         self.writeRealCoverage()
-        df = self.df.sort_values('walk_cycles', ascending=True)
+        df = self.df.sort_values(self.metric, ascending=True)
         return df.iloc[0]
 
     def getRemainingBudget(self, left_layout):
@@ -222,20 +224,22 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
 
 class StateLog(Log):
-    def __init__(self, exp_dir, results_df, right_layout, left_layout, max_gap, max_budget, dry_run):
+    def __init__(self, exp_dir, results_df, 
+                 right_layout, left_layout, 
+                 max_gap, max_budget, metric, dry_run):
         default_columns = [
             'layout', 'scan_base', 'increment_base',
             'scan_direction', 'scan_order', 'scan_value',
             'pebs_coverage', 'increment_real_coverage',
             'expected_real_coverage', 'real_coverage',
-            'walk_cycles']
+            self.metric]
         self.right_layout = right_layout
         self.left_layout = left_layout
         state_name = right_layout + '_' + left_layout
         super().__init__(exp_dir, results_df,
                          state_name + '_state.log',
-                         max_gap, max_budget, dry_run,
-                         default_columns)
+                         max_gap, max_budget, metric, 
+                         dry_run, default_columns)
         super().writeRealCoverage()
         self.pages_log_name = self.exp_dir + '/layout_pages.log'
         if not os.path.isfile(self.pages_log_name):
@@ -270,7 +274,7 @@ class StateLog(Log):
             'increment_base': increment_base,
             'increment_real_coverage': self.getRealCoverage(increment_base),
             'real_coverage': -1,
-            'walk_cycles': -1
+            self.metric: -1
             }, ignore_index=True)
         if writeLog:
             self.writeLog()

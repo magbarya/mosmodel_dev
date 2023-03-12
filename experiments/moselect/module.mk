@@ -23,6 +23,7 @@ $(LAYOUT_FILES): $(MOSELECT_EXPERIMENT)/layouts/%.csv: $(MEMORY_FOOTPRINT_FILE) 
 		--layout=$* \
 		--max_gap=$(MOSELECT_MAX_GAP) \
 		--max_budget=$(MOSELECT_NUM_LAYOUTS) \
+		--metric=stlb_misses \
 		--exp_dir=$(dir $@)/.. \
 		--results_file=$(MOSELECT_RESULTS)/median.csv
 

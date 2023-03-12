@@ -9,6 +9,9 @@ def parseArguments():
     parser.add_argument('-p', '--pebs_mem_bins', default='mem_bins_2mb.csv')
     parser.add_argument('-g', '--max_gap', type=int, default=4)
     parser.add_argument('-b', '--max_budget', type=int, default=50)
+    parser.add_argument('-t', '--metric', 
+                        choices=['walk_cycles', 'stlb_misses', 'stlb_hits'], 
+                        default='walk_cycles')
     parser.add_argument('-l', '--layout', required=True)
     parser.add_argument('-e', '--exp_dir', required=True)
     parser.add_argument('-r', '--results_file', required=True)
@@ -25,9 +28,10 @@ if __name__ == "__main__":
 
     LayoutGeneratorUtils.setPoolsFootprints(brk_footprint, mmap_footprint)
 
-    results_df = LayoutGeneratorUtils.loadDataframe(args.results_file)
+    results_df = LayoutGeneratorUtils.loadDataframe(args.results_file, args.metric)
 
     pebs_df = LayoutGeneratorUtils.normalizePebsAccesses(args.pebs_mem_bins)
 
-    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, args.max_gap, args.max_budget, args.debug)
+    layout_generator = LayoutGenerator(pebs_df, results_df, args.layout, args.exp_dir, 
+                                       args.max_gap, args.max_budget, args.metric, args.debug)
     layout_generator.generateLayout()

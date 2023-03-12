@@ -18,7 +18,7 @@ from performance_statistics import PerformanceStatistics
 HEAD_PAGES_WEIGHT_THRESHOLD = 5.0
 
 class LayoutGenerator():
-    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget, debug):
+    def __init__(self, pebs_df, results_df, layout, exp_dir, max_gap, max_budget, metric, debug):
         self.pebs_df = pebs_df
         self.results_df = results_df
         self.layout = layout
@@ -26,8 +26,9 @@ class LayoutGenerator():
         self.max_gap = max_gap
         self.default_increment = 2 * max_gap
         self.max_budget = max_budget
+        self.metric = metric
         self.debug = debug
-        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget, debug)
+        self.subgroups_log = SubgroupsLog(exp_dir, results_df, max_gap, max_budget, metric, debug)
         self.all_layouts = self.getAllLayoutsFromStateLogs()
         self.state_log = None
     def generateLayout(self):
@@ -168,8 +169,8 @@ class LayoutGenerator():
         if self.subgroups_log.empty():
             #results_df_sorted = self.results_df.query(
             #        f'layout in {subgroups_layouts}').sort_values(
-            #                'walk_cycles', ascending=False)
-            results_df_sorted = self.results_df.sort_values('walk_cycles', ascending=False)
+            #                self.metric, ascending=False)
+            results_df_sorted = self.results_df.sort_values(self.metric, ascending=False)
             for index, row in results_df_sorted.iterrows():
                 layout = row['layout']
                 layout_pages = LayoutGeneratorUtils.getLayoutHugepages(layout, self.exp_dir)
@@ -201,6 +202,7 @@ class LayoutGenerator():
                                       left_layout,
                                       self.max_gap,
                                       self.max_budget,
+                                      self.metric, 
                                       self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
@@ -225,6 +227,7 @@ class LayoutGenerator():
                                       left_layout,
                                       self.max_gap,
                                       self.max_budget,
+                                      self.metric, 
                                       self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
@@ -295,7 +298,7 @@ class LayoutGenerator():
         self.state_log = StateLog(self.exp_dir,
                                     self.results_df,
                                     right['layout'], left['layout'],
-                                    self.max_gap, self.max_budget, self.debug)
+                                    self.max_gap, self.max_budget, self.metric, self.debug)
         self.updateStateLog(right, left)
         self.autoReduceMaximalGap()
         return False
@@ -353,7 +356,7 @@ class LayoutGenerator():
         self.state_log = StateLog(self.exp_dir,
                                     self.results_df,
                                     right_layout, left_layout,
-                                    self.max_gap, self.max_budget, self.debug)
+                                    self.max_gap, self.max_budget, self.metric, self.debug)
         self.updateStateLog(right, left)
 
 
@@ -510,11 +513,10 @@ class LayoutGenerator():
     def updateStateLog(self, right_layout, left_layout):
         # if the state was not created yet then create it and add all
         # layouts that in the range [left_layout - right_layout]
-        state_layouts = self.results_df.query(
-            'walk_cycles >= {left} and walk_cycles <= {right}'.format(
-                left=left_layout['walk_cycles'],
-                right=right_layout['walk_cycles']))
-        state_layouts = state_layouts.sort_values('walk_cycles', ascending=False)
+        left=left_layout[self.metric]
+        right=right_layout[self.metric]
+        state_layouts = self.results_df.query(f'{self.metric} >= "{left}" and {self.metric} <= "{right}"')
+        state_layouts = state_layouts.sort_values(self.metric, ascending=False)
         #for layout_name in [right_layout['layout'], left_layout['layout']]:
         for index, row in state_layouts.iterrows():
             layout_name = row['layout']
@@ -1104,6 +1106,7 @@ class LayoutGenerator():
                     left_layout,
                     self.max_gap,
                     self.max_budget,
+                    self.metric, 
                     self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
@@ -1442,16 +1445,19 @@ class LayoutGeneratorUtils(metaclass=Singleton):
         LayoutGeneratorUtils.brk_footprint = brk_footprint
         LayoutGeneratorUtils.mmap_footprint = mmap_footprint
 
-    def loadDataframe(results_file):
+    def loadDataframe(results_file, metric='walk_cycles'):
         if not os.path.isfile(results_file):
             return None
         results_ps = PerformanceStatistics(results_file)
         results_df = results_ps.getDataFrame()
         results_df['cpu-cycles'] = results_ps.getRuntime()
-        results_df['walk_cycles'] = results_ps.getWalkDuration()
-        results_df['stlb_hits'] = results_ps.getStlbHits()
-        results_df['stlb_misses'] = results_ps.getStlbMisses()
-        df = results_df[['layout', 'walk_cycles', 'stlb_hits', 'stlb_misses', 'cpu-cycles']]
+        if metric == 'walk_cycles':
+            results_df['walk_cycles'] = results_ps.getWalkDuration()
+        elif metric == 'stlb_hits':
+            results_df['stlb_hits'] = results_ps.getStlbHits()
+        elif metric == 'stlb_misses':
+            results_df['stlb_misses'] = results_ps.getStlbMisses()
+        df = results_df[['layout', metric, 'cpu-cycles']]
         # drop duplicated rows
         important_columns = list(df.columns)
         important_columns.remove('layout')
