@@ -46,24 +46,47 @@ class PerformanceStatistics:
             raise Exception('the data-set has no performance counters for STLB hits!')
 
     def getStlbMisses(self, index=None):
+        try:
+            return self.getStlbMissesRetired(index)
+        except:
+            pass
+        try:
+            return self.getStlbMissesCompleted(index)
+        except:
+            pass
+        try:
+            return self.getStlbMissesStarted(index)
+        except:
+            pass
+
+        raise Exception('the data-set has no performance counters for TLB misses!')
+
+    def getStlbMissesStarted(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.miss_causes_a_walk' in self._df.columns \
                 and 'dtlb_store_misses.miss_causes_a_walk' in self._df.columns:
                     return data_set['dtlb_load_misses.miss_causes_a_walk'] \
                             + data_set['dtlb_store_misses.miss_causes_a_walk']
         else:
-            raise Exception('the data-set has no performance counters for TLB misses!')
+            raise Exception('the data-set has no performance counters for "started" TLB misses!')
 
-    '''
-    def getStlbMisses(self, index=None):
+    def getStlbMissesCompleted(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.walk_completed' in self._df.columns \
-        and 'dtlb_store_misses.walk_completed' in self._df.columns:
-            return data_set['dtlb_load_misses.walk_completed'] \
-                    + data_set['dtlb_store_misses.walk_completed']
+                and 'dtlb_store_misses.walk_completed' in self._df.columns:
+                    return data_set['dtlb_load_misses.walk_completed'] \
+                            + data_set['dtlb_store_misses.walk_completed']
         else:
-            raise Exception('the data-set has no performance counters for STLB misses (dtlb-misses-walk-completed)!')
-    '''
+            raise Exception('the data-set has no performance counters for "completed" TLB misses!')
+
+    def getStlbMissesRetired(self, index=None):
+        data_set = self.__getDataSet(index)
+        if 'mem_inst_retired.stlb_miss_loads' in self._df.columns \
+                and 'mem_inst_retired.stlb_miss_stores' in self._df.columns:
+                    return data_set['mem_inst_retired.stlb_miss_loads'] \
+                            + data_set['mem_inst_retired.stlb_miss_stores']
+        else:
+            raise Exception('the data-set has no performance counters for "retired" TLB misses!')
 
     def getStlbMisses2m(self, index=None):
         data_set = self.__getDataSet(index)

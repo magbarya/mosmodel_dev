@@ -18,7 +18,7 @@ class Log():
 
     def __init__(self,
                  exp_dir, results_df, log_name,
-                 max_gap, max_budget, metric, 
+                 max_gap, max_budget, metric,
                  dry_run, default_columns, converters=None):
         self.exp_dir = exp_dir
         self.results_df = results_df
@@ -114,11 +114,11 @@ class Log():
 
 
 class SubgroupsLog(Log, metaclass=Singleton):
-    def __init__(self, exp_dir, results_df, 
+    def __init__(self, exp_dir, results_df,
                  max_gap, max_budget, metric, dry_run):
         default_columns = [
             'layout', 'total_budget', 'remaining_budget',
-            'pebs_coverage', 'real_coverage', self.metric]
+            'pebs_coverage', 'real_coverage', metric]
         super().__init__(exp_dir, results_df, 'subgroups.log', max_gap, max_budget, metric, dry_run, default_columns)
 
     def addRecord(self,
@@ -224,21 +224,21 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
 
 class StateLog(Log):
-    def __init__(self, exp_dir, results_df, 
-                 right_layout, left_layout, 
+    def __init__(self, exp_dir, results_df,
+                 right_layout, left_layout,
                  max_gap, max_budget, metric, dry_run):
         default_columns = [
             'layout', 'scan_base', 'increment_base',
             'scan_direction', 'scan_order', 'scan_value',
             'pebs_coverage', 'increment_real_coverage',
             'expected_real_coverage', 'real_coverage',
-            self.metric]
+            metric]
         self.right_layout = right_layout
         self.left_layout = left_layout
         state_name = right_layout + '_' + left_layout
         super().__init__(exp_dir, results_df,
                          state_name + '_state.log',
-                         max_gap, max_budget, metric, 
+                         max_gap, max_budget, metric,
                          dry_run, default_columns)
         super().writeRealCoverage()
         self.pages_log_name = self.exp_dir + '/layout_pages.log'

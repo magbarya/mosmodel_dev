@@ -122,7 +122,7 @@ class LayoutGenerator():
         self.subgroups_log.writeLog()
 
     def findSubgroupsToRedistribute(self):
-        real_coverage_threshold = 20
+        real_coverage_threshold = self.max_gap * 5
         self.updateSubgroupsLog(False)
         next_layout_num = 10
         created_new_layouts = False
@@ -202,7 +202,7 @@ class LayoutGenerator():
                                       left_layout,
                                       self.max_gap,
                                       self.max_budget,
-                                      self.metric, 
+                                      self.metric,
                                       self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
@@ -227,7 +227,7 @@ class LayoutGenerator():
                                       left_layout,
                                       self.max_gap,
                                       self.max_budget,
-                                      self.metric, 
+                                      self.metric,
                                       self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
@@ -515,7 +515,7 @@ class LayoutGenerator():
         # layouts that in the range [left_layout - right_layout]
         left=left_layout[self.metric]
         right=right_layout[self.metric]
-        state_layouts = self.results_df.query(f'{self.metric} >= "{left}" and {self.metric} <= "{right}"')
+        state_layouts = self.results_df.query(f'{self.metric} >= {left} and {self.metric} <= {right}')
         state_layouts = state_layouts.sort_values(self.metric, ascending=False)
         #for layout_name in [right_layout['layout'], left_layout['layout']]:
         for index, row in state_layouts.iterrows():
@@ -1106,7 +1106,7 @@ class LayoutGenerator():
                     left_layout,
                     self.max_gap,
                     self.max_budget,
-                    self.metric, 
+                    self.metric,
                     self.debug)
             # if the state log is empty then it seems just now we are
             # about to start scanning this group
