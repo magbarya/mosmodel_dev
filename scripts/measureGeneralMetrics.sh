@@ -8,7 +8,7 @@ fi
 command="$@"
 
 prefix_perf_command="perf stat --field-separator=, --output=perf.out"
-general_events="cycles,instructions,"
+general_events="cpu-cycles,instructions,"
 tlb_events=mem_inst_retired.all_loads,mem_inst_retired.all_stores,mem_inst_retired.stlb_miss_loads,mem_inst_retired.stlb_miss_stores,dtlb_load_misses.walk_completed,dtlb_store_misses.walk_completed
 
 perf_command="$prefix_perf_command --event $general_events$tlb_events -- "
