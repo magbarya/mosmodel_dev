@@ -13,7 +13,7 @@ parser.add_argument('-d', '--max_degree', default=3, type=int,
                     help='maximum degree of polynomials')
 parser.add_argument('-m', '--metric', default='cpu-cycles',
                     help='the metric to use (e.g., cpu-cycles)')
-parser.add_argument('-x', '--x_metric', default='walk_cycles',
+parser.add_argument('-x', '--x_metric', default='tlb_misses',
                     help='the metric to use on X-axis (e.g., walk_cycles/tlb-misses)')
 args = parser.parse_args()
 
