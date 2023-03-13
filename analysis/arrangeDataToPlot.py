@@ -10,7 +10,7 @@ parser.add_argument('-o', '--output', help='the output file name')
 parser.add_argument('-n', '--normalize', choices=[None, 'by-y', 'separate'],
         default=None, help='how to normalize the data columns')
 parser.add_argument('-x', '--x-metric', choices=['walk_cycles', 'tlb_misses'],
-        default='walk_cycles', help='which event to use in the x-axis')
+        default='tlb_misses', help='which event to use in the x-axis')
 parser.add_argument('-y', '--y-metric', default='cpu-cycles',
        help='which event to use in the y-axis')
 args = parser.parse_args()
