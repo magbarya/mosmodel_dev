@@ -86,6 +86,26 @@ class BenchmarkRun:
                 env=environment_variables, stdout=self._log_file, stderr=self._log_file)
         return p
 
+    def async_run(self, num_threads, submit_command):
+        print('running the benchmark ' + self._benchmark_dir + '...')
+        print('the full submit command is:\n\t' + submit_command + ' ./run.sh')
+        environment_variables = {"OMP_NUM_THREADS": str(num_threads),
+                "OMP_THREAD_LIMIT": str(num_threads)}
+        environment_variables.update(os.environ)
+        os.chdir(self._output_dir)
+        self._async_process = subprocess.Popen(shlex.split(submit_command + ' ./run.sh'),
+                stdout=self._log_file, stderr=self._log_file, env=environment_variables)
+        return p
+
+    def async_wait(self):
+        print('waiting for the run to complete...')
+        if not self._async_process:
+            sys.exit(f'Error: there is no process running asynchronously!')
+
+        self._async_process.wait()
+        if self._async_process.returncode != 0:
+            raise subprocess.CalledProcessError(self._async_process.returncode, ' '.join(self._async_process.args))
+
     # postrun is required, for example, to validate the run() outputs
     def postrun(self):
         print(f'{self._benchmark_dir}: postrunning')
