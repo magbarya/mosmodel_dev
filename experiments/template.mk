@@ -34,7 +34,9 @@ LAYOUT_FILES := $(addsuffix .csv,$(LAYOUT_FILES))
 $(LAYOUTS_DIR): $(LAYOUT_FILES)
 
 EXPERIMENTS := $(addprefix $(EXPERIMENT_DIR)/,$(LAYOUTS)) 
-RESULTS := $(addsuffix /mean.csv,$(RESULT_DIR)) 
+MEAN_RESULTS := $(addsuffix /mean.csv,$(RESULT_DIR))
+RESULT_FILES := median.csv std.csv all_repeats.csv
+ALL_RESULTS := $(foreach f,$(RESULT_FILES),$(addsuffix /$(f),$(RESULT_DIR)))
 
 REPEATS := $(shell seq 1 $(NUM_OF_REPEATS))
 REPEATS := $(addprefix repeat,$(REPEATS)) 
@@ -72,9 +74,10 @@ $(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call SLURM_EXPS
 endif
 
 results: $(RESULT_DIR)
-$(RESULTS): LAYOUT_LIST := $(call array_to_comma_separated,$(LAYOUTS))
-$(RESULT_DIR): $(RESULTS)
-$(RESULTS): results/%/mean.csv: experiments/%
+$(RESULT_DIR) $(ALL_RESULTS): $(MEAN_RESULTS)
+
+$(MEAN_RESULTS): LAYOUT_LIST := $(call array_to_comma_separated,$(LAYOUTS))
+$(MEAN_RESULTS): results/%/mean.csv: experiments/%
 	mkdir -p $(dir $@)
 	$(COLLECT_RESULTS) --experiments_root=$< --repeats=$(NUM_OF_REPEATS) \
 		--layouts=$(LAYOUT_LIST) --output_dir=$(dir $@) --skip_outliers
