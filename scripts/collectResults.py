@@ -95,7 +95,6 @@ if not args.skip_outliers:
 # if there are no outliers, write the aggregated results
 writeDataframeToCsv(mean_df, output_dir + 'mean.csv')
 writeDataframeToCsv(median_df, output_dir + 'median.csv')
-if len(layout_list) > 1:
-    writeDataframeToCsv(df, output_dir + 'all_repeats.csv')
-    writeDataframeToCsv(std_df, output_dir + 'std.csv')
+writeDataframeToCsv(df, output_dir + 'all_repeats.csv')
+writeDataframeToCsv(std_df, output_dir + 'std.csv')
 
