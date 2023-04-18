@@ -95,7 +95,6 @@ class BenchmarkRun:
         os.chdir(self._output_dir)
         self._async_process = subprocess.Popen(shlex.split(submit_command + ' ./run.sh'),
                 stdout=self._log_file, stderr=self._log_file, env=environment_variables)
-        return p
 
     def async_wait(self):
         print('waiting for the run to complete...')
