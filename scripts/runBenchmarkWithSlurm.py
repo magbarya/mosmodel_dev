@@ -13,6 +13,8 @@ def getCommandLineArguments():
             help='the number of repetitions (it is recommended to be >= the number of sockets)')
     parser.add_argument('-s', '--submit_command', type=str, default='',
             help='a command that will prefix running the benchmark, e.g., "perf stat --".')
+    parser.add_argument('-c', '--clean_threshold', type=int, default=1024*1024,
+            help='delete files larger than this size (in bytes) after the benchmark runs')
     parser.add_argument('-x', '--exclude_files', type=str, nargs='*', default=[],
             help='list of files to not remove')
     parser.add_argument('-f', '--force', action='store_true', default=False,
@@ -48,7 +50,7 @@ if __name__ == "__main__":
         if not run.doesOutputDirectoryExist():
             run.async_wait()
             run.postrun()
-            run.clean(args.exclude_files)
+            run.clean(args.clean_threshold, args.exclude_files)
 
 
 
