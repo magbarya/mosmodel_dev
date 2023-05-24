@@ -6,6 +6,7 @@ SUBMODULES := \
 	static_auto_mosalloc \
 	dynamic_auto_mosalloc \
 	moselect \
+	bayesian_optimization \
 	dynamic_grouping \
 	runtime_range \
 	growing_window_2m \
