@@ -246,9 +246,7 @@ class BayesianExperiment:
         print(f'Running workload under memory layout with {len(mem_layout)} hugepages')
         print('--------------------------------------')
         out_dir = f'{self.exp_root_dir}/{layout_name}'
-        layout_file = f'{self.exp_root_dir}/layouts/{layout_name}.csv'
-        run_bayesian_cmd = self.run_experiment_cmd.replace('OUT_DIR', out_dir)
-        run_bayesian_cmd = run_bayesian_cmd.replace('CONFIG_FILE', layout_file)
+        run_bayesian_cmd = f'{self.run_experiment_cmd} {layout_name}'
         ret_code = BayesianExperiment.run_command(run_bayesian_cmd, out_dir)
         if ret_code != 0:
             raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')

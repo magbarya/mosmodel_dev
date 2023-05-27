@@ -31,8 +31,8 @@ $(MODULE_NAME): $(MEMORY_FOOTPRINT_FILE) analysis/pebs_tlb_miss_trace/mem_bins_2
 		--pebs_mem_bins=$(MEM_BINS_2MB_CSV_FILE) \
 		--exp_root_dir=$(BAYESIAN_EXPERIMENT_ROOT_DIR) \
 		--results_file=$(BAYESIAN_RESULTS_DIR)/median.csv \
-		--collect_reults_cmd="$(COLLECT_BAYESIAN_RESULTS_COMMAND)" \
-		--run_experiment_cmd="$(RUN_BAYESIAN_EXP_COMMANMD)" \
+		--collect_reults_cmd=$(BAYESIAN_COLLECT_RESULTS) \
+		--run_experiment_cmd=$(BAYESIAN_RUN_BENCHMARK) \
 		--num_layouts=$(BAYESIAN_NUM_LAYOUTS)
 
 .PHONY: $(MODULE_NAME)
