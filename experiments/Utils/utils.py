@@ -3,12 +3,17 @@
 import pandas as pd
 import numpy as np
 import os, sys
-from Utils.performance_statistics import PerformanceStatistics
 from Utils.ConfigurationFile import Configuration
 from sklearn.utils import shuffle, resample
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import r2_score
 import math
+
+curr_file_dir = os.path.dirname(os.path.abspath(__file__))
+experiments_root_dir = os.path.join(curr_file_dir, '..')
+analysis_root_dir = os.path.join(experiments_root_dir, '../analysis')
+sys.path.append(analysis_root_dir)
+from performance_statistics import PerformanceStatistics
 
 # TODO: go over all files that import Utils and modify them to use 
 # the Utils class

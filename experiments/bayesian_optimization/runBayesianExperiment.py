@@ -10,7 +10,10 @@ from bitarray import bitarray
 import subprocess
 import math
 import os, sys
-sys.path.append(os.path.dirname(os.path.abspath(__file__))+'/..')
+
+curr_file_dir = os.path.dirname(os.path.abspath(__file__))
+experiments_root_dir = os.path.join(curr_file_dir, '..')
+sys.path.append(experiments_root_dir)
 from Utils.utils import Utils
 
 class BayesianExperiment:

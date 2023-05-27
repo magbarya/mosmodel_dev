@@ -18,7 +18,10 @@ SUBMODULES := \
 	subgroups_head_pages \
 	genetic_scan \
 	smart_genetic_scan
-SUBMODULES := $(addprefix $(MODULE_NAME)/,$(SUBMODULES))
+
+EXPERIMENTS_MODULE_NAME := $(MODULE_NAME)
+EXPERIMENTS_SUBMODULES := $(addprefix $(EXPERIMENTS_MODULE_NAME)/,$(SUBMODULES))
+SUBMODULES := $(EXPERIMENTS_SUBMODULES)
 
 ##### mosalloc paths
 RUN_MOSALLOC_TOOL := $(ROOT_DIR)/mosalloc/runMosalloc.py
@@ -47,6 +50,7 @@ export NUMBER_OF_SOCKETS := $(shell ls -d /sys/devices/system/node/node*/ | wc -
 export NUMBER_OF_CORES_PER_SOCKET := $(shell ls -d /sys/devices/system/node/node0/cpu*/ | wc -w)
 export OMP_NUM_THREADS := $(NUMBER_OF_CORES_PER_SOCKET) 
 export OMP_THREAD_LIMIT := $(OMP_NUM_THREADS) 
+export EXPERIMENTS_ROOT_DIR := $(ROOT_DIR)/$(MODULE_NAME)
 
 define configuration_array
 $(addprefix configuration,$(shell seq 1 $1))
@@ -86,6 +90,39 @@ numactl:
 TEST_RUN_MOSALLOC_TOOL := $(SCRIPTS_ROOT_DIR)/testRunMosallocTool.sh
 test-run-mosalloc-tool: $(RUN_MOSALLOC_TOOL) $(MOSALLOC_TOOL)
 	$(TEST_RUN_MOSALLOC_TOOL) $<
+
+#### recipes and rules for creating run_and_collect_results.sh script
+
+CUSTOM_RUN_EXPERIMENT_TEMPLATE := $(EXPERIMENTS_ROOT_DIR)/run_benchmark.sh.template
+CUSTOM_RUN_EXPERIMENT_SCRIPT := $(EXPERIMENTS_ROOT_DIR)/run_benchmark.sh
+CUSTOM_COLLECT_RESULTS_TEMPLATE := $(EXPERIMENTS_ROOT_DIR)/collect_results.sh.template
+CUSTOM_COLLECT_RESULTS_SCRIPT := $(EXPERIMENTS_ROOT_DIR)/collect_results.sh
+
+NUM_OF_REPEATS ?= 4
+NUMBER_OF_THREADS ?= $(NUMBER_OF_CORES_PER_SOCKET)
+
+$(CUSTOM_COLLECT_RESULTS_SCRIPT): | $(CUSTOM_COLLECT_RESULTS_TEMPLATE)
+	cp $| $@
+	sed -i "s,__COLLECT_RESULTS_SCRIPT__,$(COLLECT_RESULTS),g" $@
+	sed -i "s,__EXPERIMENTS_ROOT_DIR__,$(EXPERIMENTS_ROOT_DIR),g" $@
+	sed -i "s,__EXPERIMENT_NAME__,$(EXPERIMENT_NAME),g" $@
+	sed -i "s,__NUM_OF_REPEATS__,$(NUM_OF_REPEATS),g" $@
+	chmod 755 $@
+
+$(CUSTOM_RUN_EXPERIMENT_SCRIPT): $(CUSTOM_RUN_EXPERIMENT_TEMPLATE)
+	cp $< $@
+	sed -i "s,__COLLECT_RESULTS_SCRIPT__,$(COLLECT_RESULTS),g" $@
+	sed -i "s,__EXPERIMENTS_ROOT_DIR__,$(EXPERIMENTS_ROOT_DIR),g" $@
+	sed -i "s,__EXPERIMENT_NAME__,$(EXPERIMENT_NAME),g" $@
+	sed -i "s,__NUM_OF_REPEATS__,$(NUM_OF_REPEATS),g" $@
+	sed -i "s,__NUM_OF_THREADS__,$(NUMBER_OF_THREADS),g" $@
+	sed -i "s,__RUN_BENCHMARK_SCRIPT__,$(RUN_BENCHMARK_WITH_SLURM),g" $@
+	sed -i "s,__MEASURE_GENERAL_METRICS_SCRIPT__,$(MEASURE_GENERAL_METRICS),g" $@
+	sed -i "s,__RUN_MOSALLOC_TOOL__,$(RUN_MOSALLOC_TOOL),g" $@
+	sed -i "s,__MOSALLOC_TOOL__,$(MOSALLOC_TOOL),g" $@
+	sed -i "s,__EXTRA_ARGS_FOR_MOSALLOC__,$(EXTRA_ARGS_FOR_MOSALLOC),g" $@
+	sed -i "s,__BENCHMARK_PATH__,$(BENCHMARK_PATH),g" $@
+	chmod 755 $@
 
 #### recipes and rules for calculating the benchmark memory footprint
 
