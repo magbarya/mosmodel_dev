@@ -20,10 +20,10 @@ class BayesianExperiment:
     # based on https://arxiv.org/pdf/1807.02811.pdf
     MAX_DIMENSIONS = 20
     DEFAULT_HUGEPAGE_SIZE = 1 << 21 # 2MB 0
-    
-    def __init__(self, 
-                 memory_footprint_file, pebs_mem_bins_file, 
-                 collect_reults_cmd, results_file, 
+
+    def __init__(self,
+                 memory_footprint_file, pebs_mem_bins_file,
+                 collect_reults_cmd, results_file,
                  run_experiment_cmd, exp_root_dir,
                  num_layouts) -> None:
         self.last_layout_num = 0
@@ -35,18 +35,18 @@ class BayesianExperiment:
         self.exp_root_dir = exp_root_dir
         self.num_layouts = num_layouts
         self.prepare_space()
-    
+
     def prepare_space(self):
         # read memory-footprints
         self.footprint_df = pd.read_csv(self.memory_footprint_file)
         self.mmap_footprint = self.footprint_df['anon-mmap-max'][0]
         self.brk_footprint = self.footprint_df['brk-max'][0]
         self.memory_footprint = self.brk_footprint
-            
+
         self.hugepage_size = BayesianExperiment.DEFAULT_HUGEPAGE_SIZE
         self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size) # bit vector length
         self.num_default_hugepages = math.ceil(self.memory_footprint / BayesianExperiment.DEFAULT_HUGEPAGE_SIZE)
-        
+
         self.dimension_size_in_bits = 64 #sys.getsizeof(int)
         self.dimension_capacity = 2**self.dimension_size_in_bits
         # the num_dimensions is calculated for (num_hugepages + 1) because
@@ -55,7 +55,7 @@ class BayesianExperiment:
         if self.num_dimensions > BayesianExperiment.MAX_DIMENSIONS:
             self.max_num_hugepages = BayesianExperiment.MAX_DIMENSIONS * self.dimension_size_in_bits
             self.hugepage_size = Utils.round_up(
-                math.ceil(self.memory_footprint / self.max_num_hugepages), 
+                math.ceil(self.memory_footprint / self.max_num_hugepages),
                 BayesianExperiment.DEFAULT_HUGEPAGE_SIZE)
             self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size)
         # update num_dimensions and layout_bit_vector_length in case we exceeded the MAX_DIMESNIONS
@@ -68,9 +68,9 @@ class BayesianExperiment:
         self.dimension_max_val = self.dimension_capacity - 1
         self.last_dimension_size_in_bits = self.num_hugepages - ((self.num_dimensions-1) * self.dimension_size_in_bits)
         self.last_dimension_max_val = 2**self.last_dimension_size_in_bits
-        self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)] 
+        self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
-        
+
         if False:
             print(f'num_dimensions: {num_dimensions}')
             print(f'memory_footprint: {memory_footprint}')
@@ -88,7 +88,7 @@ class BayesianExperiment:
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
-        
+
         # Run the command
         process = subprocess.Popen(command, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, error = process.communicate()
@@ -99,7 +99,7 @@ class BayesianExperiment:
 
         # Check the return code
         return_code = process.returncode
-        
+
         output_log = f'{out_dir}/benchmark.log'
         error_log = f'{out_dir}/benchmark.log'
         with open(output_log, 'w+') as out:
@@ -117,20 +117,20 @@ class BayesianExperiment:
             print('Output:', output)
             print('Error:', error)
             print('Return code:', return_code)
-        
+
         return return_code
 
     def collect_results(collect_reults_cmd, results_file):
         print('-------------------------------------------')
         print('collecting results....')
         print(collect_reults_cmd)
-        
+
         # Extract the directory path
         results_dir = os.path.dirname(results_file)
         # Create the directory if it doesn't exist
         if not os.path.exists(results_dir):
             os.makedirs(results_dir)
-            
+
         ret_code = BayesianExperiment.run_command(collect_reults_cmd, results_dir)
         if ret_code != 0:
             raise RuntimeError(f'Error: collecting experiment results failed with error code: {ret_code}')
@@ -138,11 +138,11 @@ class BayesianExperiment:
             results_df = Utils.load_dataframe(results_file)
         else:
             results_df = pd.DataFrame()
-        
+
         print('-------------------------------------------')
-        
+
         return results_df
-    
+
     def convert_to_gray(binary):
         if isinstance(binary, str):
             binary = bitarray(binary)
@@ -162,7 +162,7 @@ class BayesianExperiment:
         bitarray_bits = bitarray_bits.zfill(max_len)
         new_bitarray = bitarray(bits_to_set) | bitarray(bitarray_bits)
         return new_bitarray
-    
+
     def convert_from_gray(gray):
         if isinstance(gray, str):
             gray = bitarray(gray)
@@ -212,10 +212,10 @@ class BayesianExperiment:
                     hugepage_idx = i * self.hugepages_in_compressed_hugepage + k
                     mem_layout_hugepages.append(hugepage_idx)
         return mem_layout_hugepages
-        
+
     def compress_memory_layout(self, mem_layout_hugepages):
-        gray_mem_layout = self.convert_mem_layout_to_gray(mem_layout_hugepages)    
-        
+        gray_mem_layout = self.convert_mem_layout_to_gray(mem_layout_hugepages)
+
         compressed_mem_layout = [0] * self.num_dimensions
         for i in range(self.num_dimensions):
             dimension_start_idx = i*self.dimension_size_in_bits
@@ -230,7 +230,7 @@ class BayesianExperiment:
             gray_i.reverse()
             gray_i_number = int(gray_i.to01(), 2)
             compressed_mem_layout[i] = gray_i_number
-        
+
         return compressed_mem_layout
 
     def get_layout_tlb_misses(self, layout_name):
@@ -241,9 +241,9 @@ class BayesianExperiment:
     def run_workload(self, compressed_mem_layout, layout_name):
         mem_layout = self.decompress_memory_layout(compressed_mem_layout)
         Utils.write_layout(layout_name, mem_layout, self.exp_root_dir, self.brk_footprint, self.mmap_footprint)
-        
+
         print('--------------------------------------')
-        print(f'Running workload under memory layout with {len(mem_layout)} hugepages')
+        print(f'Running {layout_name} with {len(mem_layout)} hugepages')
         print('--------------------------------------')
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_bayesian_cmd = f'{self.run_experiment_cmd} {layout_name}'
@@ -252,11 +252,11 @@ class BayesianExperiment:
             raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')
         tlb_misses = self.get_layout_tlb_misses(layout_name)
         return tlb_misses
-        
+
     # Define the objective function using named arguments and the use_named_args decorator
     # @use_named_args(self.dimensions)
-    def objective_function(self, **params):
-        mem_layout = [params[f'mem_region_{i}'] for i in range(self.num_dimensions)]
+    def objective_function(self, mem_layout):
+        # mem_layout = [params[f'mem_region_{i}'] for i in range(self.num_dimensions)]
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
         return self.run_workload(mem_layout, layout_name)
@@ -269,11 +269,11 @@ class BayesianExperiment:
 
     def chebyshev_initial_samples(self, num_samples):
         '''
-        Generate initial samples for Bayesian optimization using 
+        Generate initial samples for Bayesian optimization using
         Chebyshev distribution with discrete integer dimensions.
-        Use roots_chebyt to obtain the Chebyshev nodes, 
-        scales the values to match the desired range, 
-        and rounds them to the nearest integer to align 
+        Use roots_chebyt to obtain the Chebyshev nodes,
+        scales the values to match the desired range,
+        and rounds them to the nearest integer to align
         with the Integer dimension.
         '''
         samples = np.zeros((num_samples, self.num_dimensions))
@@ -317,17 +317,21 @@ class BayesianExperiment:
         for index, row in res_df.iterrows():
             layout_name = row['layout']
             mem_layout_pages = Utils.load_layout_hugepages(layout_name, self.exp_root_dir)
-            runtime = row['cpu_cycles']
-            X0.append(mem_layout_pages)
-            Y0.append(runtime)
+            tlb_misses = row['stlb_misses']
+            compressed_mem_layout = self.compress_memory_layout(mem_layout_pages)
+            X0.append(compressed_mem_layout)
+            Y0.append(tlb_misses)
             self.last_layout_num += 1
+        print('*****************************************************')
+        print(Y0)
+        print('*****************************************************')
         return X0, Y0
 
     def generate_initial_samples(self, num_initial_points):
         X0, Y0 = self.get_previous_run_samples()
         if X0:
             return X0, Y0
-        
+
         mem_layouts = self.base_mem_layouts()
         # mem_layouts = random_initial_samples(num_initial_points)
         # mem_layouts = chebyshev_initial_samples(num_initial_points)
@@ -340,14 +344,14 @@ class BayesianExperiment:
             tlb_misses = self.run_workload(compressed_mem_layout, layout_name)
             Y0.append(tlb_misses) # evaluate the objective function for each sample
         return X0, Y0
-            
+
     def run(self, initial_points=None):
         if initial_points is None:
             initial_points = self.num_hugepages * 3
             # initial_points = 100
         # Define the initial data samples (X and Y pairs) for Bayesian optimization
-        
-        X0, Y0 = self.generate_initial_samples(initial_points)    
+
+        X0, Y0 = self.generate_initial_samples(initial_points)
         # Perform Bayesian optimization with the initial data samples
         result = gp_minimize(self.objective_function,  # the objective function to minimize
                             dimensions=self.dimensions,  # the search space
@@ -376,7 +380,7 @@ def parseArguments():
     parser.add_argument('-r', '--results_file', required=True)
     parser.add_argument('-c', '--collect_reults_cmd', required=True)
     parser.add_argument('-x', '--run_experiment_cmd', required=True)
-    parser.add_argument('-n', '--num_layouts', required=True)
+    parser.add_argument('-n', '--num_layouts', required=True, type=int)
     parser.add_argument('-d', '--debug', action='store_true')
     return parser.parse_args()
 
@@ -385,7 +389,7 @@ if __name__ == "__main__":
 
     # profiler = cProfile.Profile()
     # profiler.enable()
-    exp = BayesianExperiment(args.memory_footprint, args.pebs_mem_bins,                         
+    exp = BayesianExperiment(args.memory_footprint, args.pebs_mem_bins,
                              args.collect_reults_cmd, args.results_file,
                              args.run_experiment_cmd, args.exp_root_dir,
                              args.num_layouts)
