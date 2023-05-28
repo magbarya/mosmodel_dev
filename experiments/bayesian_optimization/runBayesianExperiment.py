@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import cProfile
+# import cProfile
 import pandas as pd
 from skopt import gp_minimize
 from skopt.space import Integer, Space
@@ -70,18 +70,7 @@ class BayesianExperiment:
         self.last_dimension_max_val = 2**self.last_dimension_size_in_bits
         self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
-
-        if False:
-            print(f'num_dimensions: {num_dimensions}')
-            print(f'memory_footprint: {memory_footprint}')
-            print(f'num_hugepages: {num_hugepages}')
-            print(f'hugepage_size: {hugepage_size}')
-            print(f'dimension_size_in_bits: {dimension_size_in_bits}')
-            print(f'last_dimension_size_in_bits: {last_dimension_size_in_bits}')
-            print(f'hugepages_in_compressed_hugepage: {hugepages_in_compressed_hugepage}')
-            print(f'layout_bit_vector_length: {layout_bit_vector_length}')
-            sys.exit(1)
-
+        
         # self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
         # self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
         self.pebs_df = None
@@ -115,16 +104,18 @@ class BayesianExperiment:
             err.write('============================================')
         if return_code != 0:
             # Print the output and error
+            print('============================================')
+            print(f'Failed to run the following command with exit code: {return_code}')
+            print(f'Command line: {command}')
             print('Output:', output)
             print('Error:', error)
             print('Return code:', return_code)
+            print('============================================')
 
         return return_code
 
     def collect_results(collect_reults_cmd, results_file):
-        print('-------------------------------------------')
-        print('collecting results....')
-        print(collect_reults_cmd)
+        print(f'** collecting results: {collect_reults_cmd}')
 
         # Extract the directory path
         results_dir = os.path.dirname(results_file)
@@ -139,8 +130,6 @@ class BayesianExperiment:
             results_df = Utils.load_dataframe(results_file)
         else:
             results_df = pd.DataFrame()
-
-        print('-------------------------------------------')
 
         return results_df
 
@@ -234,24 +223,27 @@ class BayesianExperiment:
 
         return compressed_mem_layout
 
-    def get_layout_tlb_misses(self, layout_name):
+    def get_layout_results(self, layout_name):
         results_df = BayesianExperiment.collect_results(self.collect_reults_cmd, self.results_file)
-        tlb_misses = results_df[results_df['layout'] == layout_name]['stlb_misses'].iloc[0]
-        return tlb_misses
+        layout_results = results_df[results_df['layout'] == layout_name]
+        tlb_misses = layout_results['stlb_misses'].iloc[0]
+        runtime = layout_results['cpu_cycles'].iloc[0]
+        return tlb_misses, runtime
 
     def run_workload(self, compressed_mem_layout, layout_name):
         mem_layout = self.decompress_memory_layout(compressed_mem_layout)
         Utils.write_layout(layout_name, mem_layout, self.exp_root_dir, self.brk_footprint, self.mmap_footprint)
 
         print('--------------------------------------')
-        print(f'Running {layout_name} with {len(mem_layout)} hugepages')
-        print('--------------------------------------')
+        print(f'** Running {layout_name} with {len(mem_layout)} hugepages')
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_bayesian_cmd = f'{self.run_experiment_cmd} {layout_name}'
         ret_code = BayesianExperiment.run_command(run_bayesian_cmd, out_dir)
         if ret_code != 0:
             raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')
-        tlb_misses = self.get_layout_tlb_misses(layout_name)
+        tlb_misses, runtime = self.get_layout_results(layout_name)
+        print(f'\tResults: runtime={runtime/1e9:.2f} Billion cycles , stlb-misses={tlb_misses/1e9:.2f} Billions')
+        print('--------------------------------------')
         return tlb_misses
 
     # Define the objective function using named arguments and the use_named_args decorator
@@ -324,9 +316,6 @@ class BayesianExperiment:
             X0.append(compressed_mem_layout)
             Y0.append(tlb_misses)
             self.last_layout_num += 1
-        print('*****************************************************')
-        print(Y0)
-        print('*****************************************************')
         return X0, Y0
 
     def generate_initial_samples(self, num_initial_points):
@@ -338,7 +327,7 @@ class BayesianExperiment:
         # mem_layouts = random_initial_samples(num_initial_points)
         # mem_layouts = chebyshev_initial_samples(num_initial_points)
         for i, mem_layout in enumerate(mem_layouts):
-            print(f'==== Producing initial sample #{i} from a layout with {len(mem_layout)*self.hugepages_in_compressed_hugepage} (x2MB) hugepages ====')
+            print(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)*self.hugepages_in_compressed_hugepage} (x2MB) hugepages')
             compressed_mem_layout = self.compress_memory_layout(mem_layout)
             X0.append(compressed_mem_layout)
             self.last_layout_num += 1
@@ -362,16 +351,19 @@ class BayesianExperiment:
                             x0=X0,  # the initial data samples
                             y0=Y0)  # the initial data sample evaluations
 
-        # print("result:", result)
-        print("Best TLB misses:", result.fun)
-        compressed_best_layout = [int(x) for x in result.x]
-        print("Best memory layout (compressed):", compressed_best_layout)
-        decompressed_best_layout = self.decompress_memory_layout(compressed_best_layout)
-        print(f"Best memory layout ({len(decompressed_best_layout)} items):")
-        if len(decompressed_best_layout) <= 20:
-            print(decompressed_best_layout)
-        else:
-            print(decompressed_best_layout[:10], '...', decompressed_best_layout[-10:])
+        print('================================================')
+        print('Finished running Bayesian Optimization process.')
+        print("result:", result)
+        print('================================================')
+        # print("Best TLB misses:", result.fun)
+        # compressed_best_layout = [int(x) for x in result.x]
+        # print("Best memory layout (compressed):", compressed_best_layout)
+        # decompressed_best_layout = self.decompress_memory_layout(compressed_best_layout)
+        # print(f"Best memory layout ({len(decompressed_best_layout)} items):")
+        # if len(decompressed_best_layout) <= 20:
+        #     print(decompressed_best_layout)
+        # else:
+        #     print(decompressed_best_layout[:10], '...', decompressed_best_layout[-10:])
 
 import argparse
 def parseArguments():
