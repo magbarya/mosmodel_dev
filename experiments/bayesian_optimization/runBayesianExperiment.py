@@ -4,7 +4,7 @@ import pandas as pd
 from skopt import gp_minimize
 from skopt.space import Integer, Space
 from skopt.utils import use_named_args
-from scipy.special import roots_chebyt
+from numpy.polynomial.chebyshev import chebgauss
 import numpy as np
 from bitarray import bitarray
 import subprocess
@@ -273,15 +273,13 @@ class BayesianExperiment:
         and rounds them to the nearest integer to align
         with the Integer dimension.
         '''
-        samples = np.zeros((num_samples, self.num_dimensions))
-        min_val = self.dimension_min_val
-        max_val = self.dimension_max_val
-        for i in range(self.num_dimensions):
-            if i == (self.num_dimensions - 1):
-                max_val = self.last_dimension_max_val
-            roots = roots_chebyt(num_samples)
-            scaled_samples = 0.5 * (np.array(roots[0]) + 1) * (max_val - min_val) + min_val
-            samples[:, i] = np.round(scaled_samples).astype(int)
+        chebyshev_dist = (chebgauss(num_samples)[0] + np.ones(num_samples)) * 0.5
+        chebyshev_dist = chebyshev_dist.reshape((num_samples, 1))
+        dimensions_space = np.full((1, self.num_dimensions), fill_value=self.dimension_max_val)
+        dimensions_space[0,-1] = self.last_dimension_max_val
+        
+        samples = chebyshev_dist * dimensions_space
+        samples = samples.astype(int)
         return samples
 
     def generate_random_layout(self):
@@ -321,14 +319,19 @@ class BayesianExperiment:
             self.last_layout_num += 1
         return X0, Y0
 
-    def generate_initial_samples(self, num_initial_points):
+    def generate_initial_samples(self, num_initial_points, type):
         X0, Y0 = self.get_previous_run_samples()
         if X0:
             return X0, Y0
 
-        mem_layouts = self.base_mem_layouts()
-        # mem_layouts = random_initial_samples(num_initial_points)
-        # mem_layouts = chebyshev_initial_samples(num_initial_points)
+        if type == 'base':
+            mem_layouts = self.base_mem_layouts()
+        elif type == 'random':
+            mem_layouts = self.random_initial_samples(num_initial_points)
+        elif type == 'chebyshev':
+            mem_layouts = self.chebyshev_initial_samples(num_initial_points)
+        else:
+            raise ValueError(f'Invalid initialization type to generate initial samples: {type}')
         for i, mem_layout in enumerate(mem_layouts):
             print(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)*self.hugepages_in_compressed_hugepage} (x2MB) hugepages')
             compressed_mem_layout = self.compress_memory_layout(mem_layout)
@@ -339,13 +342,10 @@ class BayesianExperiment:
             Y0.append(tlb_misses) # evaluate the objective function for each sample
         return X0, Y0
 
-    def run(self, initial_points=None):
-        if initial_points is None:
-            initial_points = self.num_hugepages * 3
-            # initial_points = 100
+    def run(self, initial_points=10, initialization_type='base'):
         # Define the initial data samples (X and Y pairs) for Bayesian optimization
-
-        X0, Y0 = self.generate_initial_samples(initial_points)
+        X0, Y0 = self.generate_initial_samples(initial_points, initialization_type)
+        
         # Perform Bayesian optimization with the initial data samples
         result = gp_minimize(self.objective_function,  # the objective function to minimize
                             dimensions=self.dimensions,  # the search space
@@ -378,6 +378,7 @@ def parseArguments():
     parser.add_argument('-c', '--collect_reults_cmd', required=True)
     parser.add_argument('-x', '--run_experiment_cmd', required=True)
     parser.add_argument('-n', '--num_layouts', required=True, type=int)
+    parser.add_argument('-i', '--initialization_method', choices=['base', 'random', 'chebyshev'], default='base')
     parser.add_argument('-d', '--debug', action='store_true')
     return parser.parse_args()
 
@@ -390,7 +391,7 @@ if __name__ == "__main__":
                              args.collect_reults_cmd, args.results_file,
                              args.run_experiment_cmd, args.exp_root_dir,
                              args.num_layouts)
-    exp.run()
+    exp.run(initialization_type=args.initialization_method)
     # profiler.disable()
     # profiler.dump_stats('profile_results.prof')
     # profiler.print_stats()
