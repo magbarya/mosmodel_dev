@@ -60,6 +60,7 @@ class BayesianExperiment:
             self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size)
             # round up the memory footprint to match the new boundaries of the new hugepage-size
             self.memory_footprint = self.num_hugepages * self.hugepage_size
+            self.brk_footprint = self.num_hugepages * self.hugepage_size
         # update num_dimensions and layout_bit_vector_length in case we exceeded the MAX_DIMESNIONS
         self.layout_bit_vector_length = self.num_hugepages
         self.gray_layout_bit_vector_length = self.layout_bit_vector_length + 1
