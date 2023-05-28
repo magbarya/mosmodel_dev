@@ -58,6 +58,8 @@ class BayesianExperiment:
                 math.ceil(self.memory_footprint / self.max_num_hugepages),
                 BayesianExperiment.DEFAULT_HUGEPAGE_SIZE)
             self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size)
+            # round up the memory footprint to match the new boundaries of the new hugepage-size
+            self.memory_footprint = self.num_hugepages * self.hugepage_size
         # update num_dimensions and layout_bit_vector_length in case we exceeded the MAX_DIMESNIONS
         self.layout_bit_vector_length = self.num_hugepages
         self.gray_layout_bit_vector_length = self.layout_bit_vector_length + 1
@@ -70,7 +72,7 @@ class BayesianExperiment:
         self.last_dimension_max_val = 2**self.last_dimension_size_in_bits
         self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
-        
+
         # self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
         # self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
         self.pebs_df = None
