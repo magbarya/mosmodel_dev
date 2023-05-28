@@ -82,8 +82,9 @@ class BayesianExperiment:
             print(f'layout_bit_vector_length: {layout_bit_vector_length}')
             sys.exit(1)
 
-        self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
-        self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
+        # self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
+        # self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
+        self.pebs_df = None
 
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
@@ -262,6 +263,7 @@ class BayesianExperiment:
         return self.run_workload(mem_layout, layout_name)
 
     def predictTlbMisses(self, mem_layout):
+        assert self.pebs_df is not None
         expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
         expected_tlb_misses = self.total_misses - expected_tlb_coverage
         print(f'[DEBUG]: mem_layout of size {len(mem_layout)} has an expected-tlb-coverage={expected_tlb_coverage} and expected-tlb-misses={expected_tlb_misses}')
