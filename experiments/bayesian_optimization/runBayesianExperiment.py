@@ -279,8 +279,10 @@ class BayesianExperiment:
         dimensions_space[0,-1] = self.last_dimension_max_val
         
         samples = chebyshev_dist * dimensions_space
-        samples = samples.astype(int)
-        return samples
+        samples = samples.astype(np.uint64)
+        
+        decompressed_samples = [self.decompress_memory_layout(s) for s in samples]
+        return decompressed_samples
 
     def generate_random_layout(self):
         mem_layout = []
