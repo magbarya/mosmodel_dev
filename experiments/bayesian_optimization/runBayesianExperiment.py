@@ -75,9 +75,8 @@ class BayesianExperiment:
         self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
 
-        # self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
-        # self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
-        self.pebs_df = None
+        self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
+        self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
 
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
@@ -226,14 +225,14 @@ class BayesianExperiment:
             compressed_mem_layout[i] = gray_i_number
 
         return compressed_mem_layout
-    
+
     def predictTlbMisses(self, mem_layout):
         assert self.pebs_df is not None
         expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
         expected_tlb_misses = self.total_misses - expected_tlb_coverage
         print(f'[DEBUG]: mem_layout of size {len(mem_layout)} has an expected-tlb-coverage={expected_tlb_coverage} and expected-tlb-misses={expected_tlb_misses}')
         return expected_tlb_misses
-    
+
     def generate_layout_from_pebs(self, pebs_coverage):
         df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
 
@@ -292,7 +291,7 @@ class BayesianExperiment:
                 group[selected_index].append(page)
                 buckets_weights[selected_index] -= weight
         return group
-    
+
     def moselect_initial_samples(self):
         # desired weights for each group layout
         buckets_weights = [56, 28, 14]
@@ -310,14 +309,14 @@ class BayesianExperiment:
         range_misses = max_misses - min_misses
         samples_misses = chebyshev_dist * range_misses + min_misses
         samples_misses = samples_misses.astype(np.uint64)
-        
+
         mem_layouts = []
         for w in samples_misses:
             layout = self.generate_layout_from_pebs(w)
             mem_layouts.append(layout)
-        
+
         return mem_layouts
-    
+
     def chebyshev_initial_samples(self, num_samples):
         '''
         Generate initial samples for Bayesian optimization using
@@ -331,10 +330,10 @@ class BayesianExperiment:
         chebyshev_dist = chebyshev_dist.reshape((num_samples, 1))
         dimensions_space = np.full((1, self.num_dimensions), fill_value=self.dimension_max_val)
         dimensions_space[0,-1] = self.last_dimension_max_val
-        
+
         samples = chebyshev_dist * dimensions_space
         samples = samples.astype(np.uint64)
-        
+
         decompressed_samples = [self.decompress_memory_layout(s) for s in samples]
         return decompressed_samples
 
@@ -430,7 +429,7 @@ class BayesianExperiment:
     def run(self, initial_points=10, initialization_type='base'):
         # Define the initial data samples (X and Y pairs) for Bayesian optimization
         X0, Y0 = self.generate_initial_samples(initial_points, initialization_type)
-        
+
         # Perform Bayesian optimization with the initial data samples
         result = gp_minimize(self.objective_function,  # the objective function to minimize
                             dimensions=self.dimensions,  # the search space
