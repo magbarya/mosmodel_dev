@@ -463,7 +463,7 @@ def parseArguments():
     parser.add_argument('-c', '--collect_reults_cmd', required=True)
     parser.add_argument('-x', '--run_experiment_cmd', required=True)
     parser.add_argument('-n', '--num_layouts', required=True, type=int)
-    parser.add_argument('-i', '--initialization_method', choices=['base', 'random', 'chebyshev', 'moselect'], default='base')
+    parser.add_argument('-i', '--initialization_method', choices=['base', 'random', 'chebyshev', 'chebyshev_misses', 'moselect'], default='base')
     parser.add_argument('-d', '--debug', action='store_true')
     return parser.parse_args()
 
