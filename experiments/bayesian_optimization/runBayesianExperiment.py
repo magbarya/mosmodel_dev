@@ -4,6 +4,7 @@ import pandas as pd
 from skopt import gp_minimize
 from skopt.space import Integer, Space
 from skopt.utils import use_named_args
+import itertools
 from numpy.polynomial.chebyshev import chebgauss
 import numpy as np
 from bitarray import bitarray
@@ -225,6 +226,28 @@ class BayesianExperiment:
             compressed_mem_layout[i] = gray_i_number
 
         return compressed_mem_layout
+    
+    def predictTlbMisses(self, mem_layout):
+        assert self.pebs_df is not None
+        expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
+        expected_tlb_misses = self.total_misses - expected_tlb_coverage
+        print(f'[DEBUG]: mem_layout of size {len(mem_layout)} has an expected-tlb-coverage={expected_tlb_coverage} and expected-tlb-misses={expected_tlb_misses}')
+        return expected_tlb_misses
+    
+    def generate_layout_from_pebs(self, pebs_coverage):
+        df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+
+        mem_layout = []
+        total_weight = 0
+        for index, row in df.iterrows():
+            page = row['PAGE_NUMBER']
+            weight = row['TLB_COVERAGE']
+            if (total_weight + weight) < (pebs_coverage + 0.5):
+                mem_layout.append(page)
+                total_weight += weight
+            if total_weight >= pebs_coverage:
+                break
+        return mem_layout
 
     def get_layout_results(self, layout_name):
         results_df = BayesianExperiment.collect_results(self.collect_reults_cmd, self.results_file)
@@ -233,37 +256,68 @@ class BayesianExperiment:
         runtime = layout_results['cpu_cycles'].iloc[0]
         return tlb_misses, runtime
 
-    def run_workload(self, compressed_mem_layout, layout_name):
-        mem_layout = self.decompress_memory_layout(compressed_mem_layout)
-        Utils.write_layout(layout_name, mem_layout, self.exp_root_dir, self.brk_footprint, self.mmap_footprint)
+    def fill_buckets(self, buckets_weights, start_from_tail=False, fill_min_buckets_first=True):
+        group_size = len(buckets_weights)
+        group = [ [] for _ in range(group_size) ]
+        df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=start_from_tail)
 
-        print('--------------------------------------')
-        print(f'** Running {layout_name} with {len(mem_layout)} hugepages')
-        out_dir = f'{self.exp_root_dir}/{layout_name}'
-        run_bayesian_cmd = f'{self.run_experiment_cmd} {layout_name}'
-        ret_code = BayesianExperiment.run_command(run_bayesian_cmd, out_dir)
-        if ret_code != 0:
-            raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')
-        tlb_misses, runtime = self.get_layout_results(layout_name)
-        print(f'\tResults: runtime={runtime/1e9:.2f} Billion cycles , stlb-misses={tlb_misses/1e9:.2f} Billions')
-        print('--------------------------------------')
-        return tlb_misses
+        threshold = 2
+        i = 0
+        for index, row in df.iterrows():
+            page = row['PAGE_NUMBER']
+            weight = row['TLB_COVERAGE']
+            selected_weight = None
+            selected_index = None
+            completed_buckets = 0
+            # count completed buckets and find bucket with minimal remaining
+            # space to fill, i.e., we prefer to place current page in the
+            # bicket that has the lowest remaining weight/space
+            for i in range(group_size):
+                if buckets_weights[i] <= 0:
+                    completed_buckets += 1
+                elif buckets_weights[i] >= weight - threshold:
+                    if selected_index is None:
+                        selected_index = i
+                        selected_weight = buckets_weights[i]
+                    elif fill_min_buckets_first and buckets_weights[i] < selected_weight:
+                        selected_index = i
+                        selected_weight = buckets_weights[i]
+                    elif not fill_min_buckets_first and buckets_weights[i] > selected_weight:
+                        selected_index = i
+                        selected_weight = buckets_weights[i]
+            if completed_buckets == group_size:
+                break
+            # if there is a bucket that has a capacity of current page, add it
+            if selected_index is not None:
+                group[selected_index].append(page)
+                buckets_weights[selected_index] -= weight
+        return group
+    
+    def moselect_initial_samples(self):
+        # desired weights for each group layout
+        buckets_weights = [56, 28, 14]
+        group = self.fill_buckets(buckets_weights)
+        mem_layouts = []
+        # create eight layouts as all subgroups of these three group layouts
+        for subset_size in range(len(group)+1):
+            for subset in itertools.combinations(group, subset_size):
+                subset_pages = list(itertools.chain(*subset))
+                mem_layouts.append(subset_pages)
+        return mem_layouts
 
-    # Define the objective function using named arguments and the use_named_args decorator
-    # @use_named_args(self.dimensions)
-    def objective_function(self, mem_layout):
-        # mem_layout = [params[f'mem_region_{i}'] for i in range(self.num_dimensions)]
-        self.last_layout_num += 1
-        layout_name = f'layout{self.last_layout_num}'
-        return self.run_workload(mem_layout, layout_name)
-
-    def predictTlbMisses(self, mem_layout):
-        assert self.pebs_df is not None
-        expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
-        expected_tlb_misses = self.total_misses - expected_tlb_coverage
-        print(f'[DEBUG]: mem_layout of size {len(mem_layout)} has an expected-tlb-coverage={expected_tlb_coverage} and expected-tlb-misses={expected_tlb_misses}')
-        return expected_tlb_misses
-
+    def chebyshev_tlb_misses_initial_samples(self, num_samples, min_misses, max_misses):
+        chebyshev_dist = (chebgauss(num_samples)[0] + np.ones(num_samples)) * 0.5
+        range_misses = max_misses - min_misses
+        samples_misses = chebyshev_dist * range_misses + min_misses
+        samples_misses = samples_misses.astype(np.uint64)
+        
+        mem_layouts = []
+        for w in samples_misses:
+            layout = self.generate_layout_from_pebs(w)
+            mem_layouts.append(layout)
+        
+        return mem_layouts
+    
     def chebyshev_initial_samples(self, num_samples):
         '''
         Generate initial samples for Bayesian optimization using
@@ -332,6 +386,11 @@ class BayesianExperiment:
             mem_layouts = self.random_initial_samples(num_initial_points)
         elif type == 'chebyshev':
             mem_layouts = self.chebyshev_initial_samples(num_initial_points)
+        elif type == 'chebyshev_misses':
+            X0, Y0 = self.generate_initial_samples(2, 'base')
+            mem_layouts = self.chebyshev_tlb_misses_initial_samples(8, Y0[1], Y0[0])
+        elif type == 'moselect':
+            mem_layouts = self.moselect_initial_samples()
         else:
             raise ValueError(f'Invalid initialization type to generate initial samples: {type}')
         for i, mem_layout in enumerate(mem_layouts):
@@ -343,6 +402,30 @@ class BayesianExperiment:
             tlb_misses = self.run_workload(compressed_mem_layout, layout_name)
             Y0.append(tlb_misses) # evaluate the objective function for each sample
         return X0, Y0
+
+    def run_workload(self, compressed_mem_layout, layout_name):
+        mem_layout = self.decompress_memory_layout(compressed_mem_layout)
+        Utils.write_layout(layout_name, mem_layout, self.exp_root_dir, self.brk_footprint, self.mmap_footprint)
+
+        print('--------------------------------------')
+        print(f'** Running {layout_name} with {len(mem_layout)} hugepages')
+        out_dir = f'{self.exp_root_dir}/{layout_name}'
+        run_bayesian_cmd = f'{self.run_experiment_cmd} {layout_name}'
+        ret_code = BayesianExperiment.run_command(run_bayesian_cmd, out_dir)
+        if ret_code != 0:
+            raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')
+        tlb_misses, runtime = self.get_layout_results(layout_name)
+        print(f'\tResults: runtime={runtime/1e9:.2f} Billion cycles , stlb-misses={tlb_misses/1e9:.2f} Billions')
+        print('--------------------------------------')
+        return tlb_misses
+
+    # Define the objective function using named arguments and the use_named_args decorator
+    # @use_named_args(self.dimensions)
+    def objective_function(self, mem_layout):
+        # mem_layout = [params[f'mem_region_{i}'] for i in range(self.num_dimensions)]
+        self.last_layout_num += 1
+        layout_name = f'layout{self.last_layout_num}'
+        return self.run_workload(mem_layout, layout_name)
 
     def run(self, initial_points=10, initialization_type='base'):
         # Define the initial data samples (X and Y pairs) for Bayesian optimization
@@ -380,7 +463,7 @@ def parseArguments():
     parser.add_argument('-c', '--collect_reults_cmd', required=True)
     parser.add_argument('-x', '--run_experiment_cmd', required=True)
     parser.add_argument('-n', '--num_layouts', required=True, type=int)
-    parser.add_argument('-i', '--initialization_method', choices=['base', 'random', 'chebyshev'], default='base')
+    parser.add_argument('-i', '--initialization_method', choices=['base', 'random', 'chebyshev', 'moselect'], default='base')
     parser.add_argument('-d', '--debug', action='store_true')
     return parser.parse_args()
 
