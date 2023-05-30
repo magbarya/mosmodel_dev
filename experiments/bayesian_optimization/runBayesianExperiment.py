@@ -75,8 +75,13 @@ class BayesianExperiment:
         self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
 
-        self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
-        self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
+        if self.pebs_mem_bins_file is None:
+            print('pebs_mem_bins_file argument is missing, skipping loading PEBS results...')
+            self.pebs_df = None
+            self.total_misses = None
+        else:
+            self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
+            self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
 
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
@@ -234,6 +239,8 @@ class BayesianExperiment:
         return expected_tlb_misses
 
     def generate_layout_from_pebs(self, pebs_coverage):
+        assert self.pebs_df is not None
+
         df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
 
         mem_layout = []
@@ -256,6 +263,8 @@ class BayesianExperiment:
         return tlb_misses, runtime
 
     def fill_buckets(self, buckets_weights, start_from_tail=False, fill_min_buckets_first=True):
+        assert self.pebs_df is not None
+
         group_size = len(buckets_weights)
         group = [ [] for _ in range(group_size) ]
         df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=start_from_tail)
@@ -456,7 +465,7 @@ import argparse
 def parseArguments():
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--memory_footprint', default='memory_footprint.txt')
-    parser.add_argument('-p', '--pebs_mem_bins', default='mem_bins_2mb.csv')
+    parser.add_argument('-p', '--pebs_mem_bins', default=None)
     parser.add_argument('-e', '--exp_root_dir', required=True)
     parser.add_argument('-r', '--results_file', required=True)
     parser.add_argument('-c', '--collect_reults_cmd', required=True)
