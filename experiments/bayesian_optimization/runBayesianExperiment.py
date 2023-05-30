@@ -391,6 +391,8 @@ class BayesianExperiment:
         if type == 'base':
             mem_layouts = self.base_mem_layouts()
         elif type == 'random':
+            return None, None
+        elif type == 'our_random':
             mem_layouts = self.random_initial_samples(num_initial_points)
         elif type == 'chebyshev':
             mem_layouts = self.chebyshev_initial_samples(num_initial_points)
