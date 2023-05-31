@@ -54,14 +54,16 @@ class BayesianExperiment:
         # an additional bit may be required when converting a binary number to gray code
         self.num_dimensions = math.ceil((self.num_hugepages + 1) / self.dimension_size_in_bits)
         if self.num_dimensions > BayesianExperiment.MAX_DIMENSIONS:
-            self.max_num_hugepages = BayesianExperiment.MAX_DIMENSIONS * self.dimension_size_in_bits
+            self.num_dimensions = BayesianExperiment.MAX_DIMENSIONS
+            # length(gray_code) = length(bit_vector) - 1
+            self.max_num_hugepages = (BayesianExperiment.MAX_DIMENSIONS * self.dimension_size_in_bits) - 1
             self.hugepage_size = Utils.round_up(
                 math.ceil(self.memory_footprint / self.max_num_hugepages),
                 BayesianExperiment.DEFAULT_HUGEPAGE_SIZE)
             self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size)
             # round up the memory footprint to match the new boundaries of the new hugepage-size
             self.memory_footprint = self.num_hugepages * self.hugepage_size
-            self.brk_footprint = self.num_hugepages * self.hugepage_size
+            self.brk_footprint = self.memory_footprint
         # update num_dimensions and layout_bit_vector_length in case we exceeded the MAX_DIMESNIONS
         self.layout_bit_vector_length = self.num_hugepages
         self.gray_layout_bit_vector_length = self.layout_bit_vector_length + 1
