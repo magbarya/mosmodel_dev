@@ -72,7 +72,7 @@ class BayesianExperiment:
         # Define the search space
         self.dimension_min_val = 0
         self.dimension_max_val = self.dimension_capacity - 1
-        self.last_dimension_size_in_bits = self.num_hugepages - ((self.num_dimensions-1) * self.dimension_size_in_bits)
+        self.last_dimension_size_in_bits = self.gray_layout_bit_vector_length % self.dimension_size_in_bits
         self.last_dimension_max_val = 2**self.last_dimension_size_in_bits
         self.dimensions = [Integer(self.dimension_min_val, self.dimension_max_val, name=f'mem_region_{i}') for i in range(self.num_dimensions - 1)]
         self.dimensions += [Integer(self.dimension_min_val, self.last_dimension_max_val, name=f'mem_region_{self.num_dimensions-1}')]
@@ -84,6 +84,16 @@ class BayesianExperiment:
         else:
             self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
             self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
+
+        if False:
+            print(f'self.layout_bit_vector_length={self.layout_bit_vector_length}')
+            print(f'self.gray_layout_bit_vector_length={self.gray_layout_bit_vector_length}')
+            print(f'self.num_dimensions={self.num_dimensions}')
+            print(f'self.hugepages_in_compressed_hugepage={self.hugepages_in_compressed_hugepage}')
+            print(f'self.last_dimension_size_in_bits={self.last_dimension_size_in_bits}')
+            print(f'self.num_hugepages={self.num_hugepages}')
+            print(f'self.hugepage_size={self.hugepage_size}')
+            print(f'self.memory_footprint={self.memory_footprint}')
 
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
