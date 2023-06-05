@@ -83,7 +83,7 @@ class BayesianExperiment:
             self.pebs_df = None
             self.total_misses = None
         else:
-            self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, False)
+            self.pebs_df = Utils.load_pebs(self.pebs_mem_bins_file, True)
             self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
 
         if False:
@@ -191,7 +191,7 @@ class BayesianExperiment:
         # createa one long bit-vector that represents the memory layout
         for p in mem_layout_hugepages:
             # mem_layout_bin = set_bits(mem_layout_bin, p)
-            aggregated_p = p // self.hugepages_in_compressed_hugepage
+            aggregated_p = int(p // self.hugepages_in_compressed_hugepage)
             mem_layout_bin[aggregated_p] = 1
         # reverse the string to make it readable as binary string
         mem_layout_bin.reverse()
