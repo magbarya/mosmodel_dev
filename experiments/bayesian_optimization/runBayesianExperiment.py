@@ -454,16 +454,23 @@ class BayesianExperiment:
         # Define the initial data samples (X and Y pairs) for Bayesian optimization
         X0, Y0 = self.generate_initial_samples(initial_points, initialization_type)
 
+        num_layouts = max(0, (self.num_layouts - len(X0)))
+        if num_layouts == 0:
+            print('================================================')
+            print(f'No more layouts to run for the experiment:\n{self.exp_root_dir}')
+            print('================================================')
+            return
+
         # Perform Bayesian optimization with the initial data samples
         result = gp_minimize(self.objective_function,  # the objective function to minimize
                             dimensions=self.dimensions,  # the search space
                             acq_func='EI',  # the acquisition function
-                            n_calls=self.num_layouts,  # the number of evaluations of f including at x0
+                            n_calls=num_layouts,  # the number of evaluations of f including at x0
                             x0=X0,  # the initial data samples
                             y0=Y0)  # the initial data sample evaluations
 
         print('================================================')
-        print('Finished running Bayesian Optimization process.')
+        print(f'Finished running Bayesian Optimization process for:\n{self.exp_root_dir}')
         print("result:", result)
         print('================================================')
         # print("Best TLB misses:", result.fun)
