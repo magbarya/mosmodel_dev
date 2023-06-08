@@ -398,13 +398,12 @@ class BayesianExperiment:
 
     def generate_initial_samples(self, num_initial_points, type):
         X0, Y0 = self.get_previous_run_samples()
-        if X0:
-            return X0, Y0
+        num_prev_samples = len(X0) if X0 else 0
 
         if type == 'base':
             mem_layouts = self.base_mem_layouts()
         elif type == 'random':
-            return None, None
+            mem_layouts = []
         elif type == 'our_random':
             mem_layouts = self.random_initial_samples(num_initial_points)
         elif type == 'chebyshev':
@@ -417,6 +416,9 @@ class BayesianExperiment:
         else:
             raise ValueError(f'Invalid initialization type to generate initial samples: {type}')
         for i, mem_layout in enumerate(mem_layouts):
+            if i < num_prev_samples:
+                self.last_layout_num += 1
+                continue
             print(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)*self.hugepages_in_compressed_hugepage} (x2MB) hugepages')
             compressed_mem_layout = self.compress_memory_layout(mem_layout)
             X0.append(compressed_mem_layout)
