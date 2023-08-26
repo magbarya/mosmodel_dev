@@ -7,7 +7,7 @@ MOSRANGE_NUM_LAYOUTS ?= 50
 MOSRANGE_NUM_OF_REPEATS ?= 4
 MOSRANGE_METRIC_NAME ?= stlb_misses
 ifndef MOSRANGE_METRIC_VALUE
-	$(error The MOSRANGE_METRIC_VALUE environment variable is not set)
+$(error The MOSRANGE_METRIC_VALUE environment variable is not set)
 endif
 
 NUM_LAYOUTS := $(MOSRANGE_NUM_LAYOUTS)
