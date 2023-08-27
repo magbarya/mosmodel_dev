@@ -39,7 +39,7 @@ class MosrangeExperiment:
         self.brk_footprint = self.footprint_df['brk-max'][0]
 
         self.hugepage_size = MosrangeExperiment.DEFAULT_HUGEPAGE_SIZE
-        self.num_hugepages = math.ceil(self.memory_footprint / self.hugepage_size) # bit vector length
+        self.num_hugepages = math.ceil(self.brk_footprint / self.hugepage_size) # bit vector length
 
         # round up the memory footprint to match the new boundaries of the new hugepage-size
         self.memory_footprint = (self.num_hugepages + 1) * self.hugepage_size
