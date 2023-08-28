@@ -256,8 +256,8 @@ class MosrangeExperiment:
         # Find the index of the closest value to X
         closest_index = (df[self.metric_name] - self.metric_val).abs().idxmin()
         # Find the two rows that surround the given stlb-misses value
-        lower_layout = df.iloc[closest_index-1]
-        upper_layout = df.iloc[closest_index+1]
+        lower_layout = df.iloc[max(0, closest_index-1)]
+        upper_layout = df.iloc[min(len(df)-1, closest_index+1)]
         return lower_layout, upper_layout
 
     def update_range_stlb_coverage(self, res_df):
