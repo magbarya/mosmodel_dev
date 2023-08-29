@@ -5,7 +5,7 @@ include $(EXPERIMENTS_VARS_TEMPLATE)
 
 MOSRANGE_METRIC_NAME ?= stlb_misses
 ifndef MOSRANGE_METRIC_VALUE
-$(error The MOSRANGE_METRIC_VALUE environment variable is not set)
+$(warning The MOSRANGE_METRIC_VALUE environment variable is not set)
 endif
 
 MOSRANGE_EXPERIMENT_ROOT_DIR := $(MODULE_NAME)
