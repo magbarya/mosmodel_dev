@@ -62,6 +62,9 @@ class MosrangeExperiment:
             self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
         # load results file
         self.results_df = self.get_runs_measurements()
+        
+        self.all_4kb_layout = []
+        self.all_2mb_layout = [i for i in range(self.num_hugepages)]
          
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
@@ -141,6 +144,10 @@ class MosrangeExperiment:
     def realMetricCoverage(self, layout_results):
         min_val = self.all_2mb_r[self.metric_name]
         max_val = self.all_4kb_r[self.metric_name]
+        if self.metric_name == 'stlb_hits':
+            min_val = self.all_4kb_r[self.metric_name]
+            max_val = self.all_2mb_r[self.metric_name]
+        
         layout_val = layout_results[self.metric_name]
         coverage = (max_val - layout_val) / (max_val - min_val)
         coverage *= 100
@@ -228,12 +235,6 @@ class MosrangeExperiment:
                 buckets_weights[selected_index] -= weight
         return group
 
-    def create_endpoint_layouts(self):
-        all_4kb_pages = []
-        all_2mb_pages = [i for i in range(self.num_hugepages)]
-        mem_layouts = [all_4kb_pages, all_2mb_pages]
-        return mem_layouts
-
     def moselect_initial_samples(self):
         # desired weights for each group layout
         buckets_weights = [56, 28, 14]
@@ -244,8 +245,7 @@ class MosrangeExperiment:
             for subset in itertools.combinations(group, subset_size):
                 subset_pages = list(itertools.chain(*subset))
                 mem_layouts.append(subset_pages)
-        all_2mb_pages = [i for i in range(self.num_hugepages)]
-        mem_layouts.append(all_2mb_pages)
+        mem_layouts.append(self.all_2mb_layout)
         return mem_layouts
 
     def generate_random_layout(self):
@@ -288,55 +288,93 @@ class MosrangeExperiment:
                 break
         return lower_layout, upper_layout
 
-    def update_range_stlb_coverage(self, res_df):
-        self.all_4kb_r = None
-        self.all_2mb_r = None
+    def update_estimated_stlb_misses(self, res_df):
         max_num_hugepages = 0
+        all_4kb_set = set(self.all_4kb_layout)
+        all_2mb_set = set(self.all_2mb_layout)
         for index, row in res_df.iterrows():
-            num_hugepages = len(row['hugepages'])
-            if num_hugepages > max_num_hugepages:
-                self.all_2mb_r = row
-            if num_hugepages == 0:
+            hugepages_set = set(row['hugepages'])
+            if hugepages_set == all_4kb_set:
                 self.all_4kb_r = row
+            elif hugepages_set == all_2mb_set:
+                self.all_2mb_r = row
         
         min_val = self.all_2mb_r[self.metric_name]
         max_val = self.all_4kb_r[self.metric_name]
+        
+        # TODO: remove the following line after testing mosrange
+        self.metric_val = (max_val + min_val) / 2 
+        
+        if self.metric_name == 'stlb_hits':
+            min_val = self.all_4kb_r[self.metric_name]
+            max_val = self.all_2mb_r[self.metric_name]
         self.metric_coverage = (max_val - self.metric_val) / (max_val - min_val)
         self.metric_coverage *= 100
         
         min_stlb_misses = self.all_2mb_r['stlb_misses']
         max_stlb_misses = self.all_4kb_r['stlb_misses']
         if self.metric_name == 'stlb_misses':
-            self.range_stlb_coverage = min_stlb_misses + self.metric_coverage * (max_stlb_misses - min_stlb_misses)
+            self.estimated_stlb_misses = self.metric_coverage
         else:
-            self.range_stlb_coverage = max_stlb_misses - self.metric_coverage * (max_stlb_misses - min_stlb_misses)
-        
+            self.estimated_stlb_misses = min_stlb_misses + (self.metric_coverage/100) * (max_stlb_misses - min_stlb_misses)
+    
+    def get_head_pages(self):
+        coverage_threshold = 2
+        head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {coverage_threshold}')
+        head_pages_list = head_pages_df['PAGE_NUMBER'].tolist()
+        return head_pages_list
+    
+    def get_closest_moselect_layout(self):
+        moselect_layouts = self.moselect_initial_samples()
+        min_coverage_delta = 100
+        closest_layout = None
+        for l in moselect_layouts:
+            coverage = self.pebsTlbCoverage(l)
+            coverage_delta = abs(coverage - self.metric_coverage)
+            if coverage_delta < min_coverage_delta:
+                min_coverage_delta = coverage_delta
+                closest_layout = l
+        assert l is not None
+        return l
+            
     def generate_initial_samples(self):
         res_df = self.get_runs_measurements()
         num_prev_samples = len(res_df)
-        mem_layouts = self.moselect_initial_samples()
-        # mem_layouts = self.create_endpoint_layouts()
+        # mem_layouts = self.moselect_initial_samples()
+        mem_layouts = [self.all_4kb_layout, self.all_2mb_layout]
         
         for i, mem_layout in enumerate(mem_layouts):
-            if i < num_prev_samples:
-                continue
             logging.info(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)} (x2MB) hugepages')
             self.run_next_layout(mem_layout)            
         res_df = self.get_runs_measurements()
-        self.update_range_stlb_coverage(res_df)
+        self.update_estimated_stlb_misses(res_df)
         return res_df
     
-    def generate_layout_from_base(self, base_pages, search_space, coverage):
+    def generate_layout_from_base(self, base_pages, search_space, coverage, sort=True):
         logging.debug(f'generate_layout_from_base(): len(base_pages)={len(base_pages)} , len(search_space)={len(search_space)} , coverage={coverage}')
         expected_coverage = coverage - self.pebsTlbCoverage(base_pages)
         df = self.pebs_df.query(f'PAGE_NUMBER in {search_space} and PAGE_NUMBER not in {base_pages}')
-        df = df.sort_values('TLB_COVERAGE', ascending=False)
+        if sort:
+            df = df.sort_values('TLB_COVERAGE', ascending=False)
         logging.debug(f'generate_layout_from_base() after filtering pages: len(df)={len(df)}')
         layout = self.generate_layout_from_pebs(expected_coverage, df)
         if layout:
             return layout+base_pages
         else:
             return []
+
+    def shuffle_and_generate_layout_from_base(self, base_pages, exclude_pages, coverage):
+        logging.debug(f'shuffle_and_generate_layout_from_base(): len(base_pages)={len(base_pages)} , len(exclude_pages)={len(exclude_pages)} , coverage={coverage}')
+        expected_coverage = coverage - self.pebsTlbCoverage(base_pages)        
+        df = self.pebs_df.query(f'PAGE_NUMBER not in {exclude_pages+base_pages}')
+        
+        iterations_len = min(100, len(df))
+        for i in range(iterations_len):
+            df = df.sample(frac=1).reset_index(drop=True)
+            layout = self.generate_layout_from_pebs(expected_coverage, df)
+            if layout and self.isPagesListUnique(layout, self.layouts):
+                return layout
+        return []
 
     def add_hugepages_to_base(self, next_coverage, base_pages, other_pages, all_pages):
         other_even_pages = [p for p in other_pages if p%2==0]
@@ -436,26 +474,6 @@ class MosrangeExperiment:
         logging.info('===========================================')
         return layout_res
 
-    def generate_and_run_layouts_v1(self, num_layouts):
-        while num_layouts > 0:
-            res_df = self.get_runs_measurements()
-            # find the sourrounding layouts of the given stlb-misses
-            lower_layout_r, upper_layout_r = self.get_surrounding_layouts(res_df)
-            alpha, beta, gamma, U = self.split_pages_to_working_sets(
-                upper_layout_r['hugepages'], lower_layout_r['hugepages'])
-            upper_mem_layout = upper_layout_r['hugepages']
-            lower_mem_layout = lower_layout_r['hugepages']
-            upper_coverage = self.pebsTlbCoverage(upper_mem_layout)
-            lower_coverage = self.pebsTlbCoverage(lower_mem_layout)
-            next_coverage = (upper_coverage + lower_coverage) / 2
-            
-            mem_layouts = self.add_hugepages_to_base(next_coverage, alpha, gamma, U)
-            for mem_layout in mem_layouts:
-                self.run_next_layout(mem_layout)
-                num_layouts -= 1
-                if num_layouts == 0:
-                    break
-    
     def isPagesListUnique(self, pages_list, all_layouts):
         pages_set = set(pages_list)
         for l in all_layouts:
@@ -558,189 +576,196 @@ class MosrangeExperiment:
         last_result = self.run_workload(mem_layout, layout_name)
         return last_result
     
-    def generate_and_run_layouts(self, option=1):
-        '''
-        upper-layout is the layout with the higher runtime (mostly with less hugepages than lower-layout)
-        lower-layout is the layout with the lower runtime (mostly with more hugepages than upper-layout)
-        Generally:
-        | Layout | runtime | TLB-misses | walk-cycles | TLB-hits | coverage |
-        =====================================================================
-        | upper  | higher  | higher     | higher      | lower    | lower    |
-        ---------------------------------------------------------------------
-        | lower  | lower   | lower      | lower       | higher   | higher   |
-        ---------------------------------------------------------------------
-        '''
-        res_df = self.get_runs_measurements()
-        lower_layout_r, upper_layout_r = self.get_surrounding_layouts(res_df)
-        upper_mem_layout = upper_layout_r['hugepages']
-        lower_mem_layout = lower_layout_r['hugepages']
-        alpha, beta, gamma, U = self.split_pages_to_working_sets(upper_mem_layout, lower_mem_layout)            
-        upper_pebs_coverage = self.pebsTlbCoverage(upper_mem_layout)
-        lower_pebs_coverage = self.pebsTlbCoverage(lower_mem_layout)
-        next_coverage = (upper_pebs_coverage + lower_pebs_coverage) / 2
-        delta_pebs_coverage = abs(upper_pebs_coverage - lower_pebs_coverage) / 2
-        upper_real_coverage = self.realMetricCoverage(upper_layout_r)
-        lower_real_coverage = self.realMetricCoverage(lower_layout_r)
-        
-        num_extra_pages = len(self.pages_not_in_pebs)//2
-        remove_ratio = None
-        add_ratio = None
-        last_result = None
-        num_hugepages_to_add = None
-        
-        logging.debug('-------------------------------------------------')
-        logging.debug('[DEBUG] next layout configuration:')
-        logging.debug(f'\t previous layouts: {len(res_df)}')
-        logging.debug(f'\t upper-layout:')
-        logging.debug(f'\t\t {upper_layout_r["layout"]}: pebs-coverage={upper_pebs_coverage} , real-coverage={upper_real_coverage} , tlb-misses={upper_layout_r["stlb_misses"]} , size={len(upper_mem_layout)}')
-        logging.debug(f'\t lower-layout:')
-        logging.debug(f'\t\t {lower_layout_r["layout"]}: pebs-coverage={lower_pebs_coverage} , real-coverage={lower_real_coverage} , tlb-misses={lower_layout_r["stlb_misses"]} , size={len(lower_mem_layout)}')
-        logging.debug(f'\t all-4KB layout:')
-        logging.debug(f'\t\t {self.all_4kb_r["layout"]}: runtime={self.all_4kb_r["cpu_cycles"]} , tlb-misses={self.all_4kb_r["stlb_misses"]} , tlb-hits={self.all_4kb_r["stlb_hits"]} , walk-cycles={self.all_4kb_r["walk_cycles"]}')
-        logging.debug(f'\t all-2MB layout:')
-        logging.debug(f'\t\t {self.all_2mb_r["layout"]}: runtime={self.all_2mb_r["cpu_cycles"]} , tlb-misses={self.all_2mb_r["stlb_misses"]} , tlb-hits={self.all_2mb_r["stlb_hits"]} , walk-cycles={self.all_2mb_r["walk_cycles"]}')
-        logging.debug(f'\t next layout:')
-        logging.debug(f'\t\t coverage={next_coverage} , range_stlb_coverage={self.range_stlb_coverage} , metric_coverage={self.metric_coverage}')
-        logging.debug(f'\t Debug info:')
-        logging.debug(f'\t\t num-pebs-pages={len(self.pebs_df)}')
-        logging.debug('-------------------------------------------------')
-        
-        while self.last_layout_num < self.num_layouts:
-            if option == 1:
-                # remove hugepages from lower layout
-                logging.info(f'=====> select layout by removing hugepages from lower layout (option#1) <======')
-                layout = self.remove_hugepages_from_base(next_coverage, lower_mem_layout, beta)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        delta_pebs_coverage *= 1.2
-                        next_coverage = lower_pebs_coverage - delta_pebs_coverage
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        delta_pebs_coverage *= 0.7
-                        next_coverage = lower_pebs_coverage - delta_pebs_coverage
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option=1)
-                        continue
-                else:
-                    logging.info('could not select layout by removing hugepages from lower layout (option#1)')
-                    option += 1
-                    self.generate_and_run_layouts(option)
-                    return
-            elif option == 2:
-                # add hugepages to upper layout
-                logging.info(f'=====> select layout by adding hugepages to upper layout (option#2) <======')
-                layout = self.add_hugepages_to_base(next_coverage, upper_mem_layout, gamma, U)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        delta_pebs_coverage *= 0.8
-                        next_coverage = upper_pebs_coverage + delta_pebs_coverage
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        delta_pebs_coverage *= 1.3
-                        next_coverage = upper_pebs_coverage + delta_pebs_coverage
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option=1)
-                        return
-                else:
-                    logging.info('could not select layout by adding hugepages to upper layout (option#2)')
-                    option += 1
-                    self.generate_and_run_layouts(option)
-                    return
-            elif option == 3:
-                # generate layout generally
-                logging.info(f'=====> select layout generally (option#3) <======')
-                layout = self.select_layout_generally(next_coverage)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        delta_pebs_coverage *= 0.8
-                        next_coverage = upper_pebs_coverage + delta_pebs_coverage
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        delta_pebs_coverage *= 1.3
-                        next_coverage = upper_pebs_coverage + delta_pebs_coverage
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option=1)
-                        return
-                else:
-                    logging.info('could not select layout generally (option#3)')
-                    option += 1
-                    self.generate_and_run_layouts(option)
-                    return
-            elif option == 4:
-                # generate layout blindly
-                logging.info(f'=====> select layout by removing hugepages blindly (option#4) <======')
-                remove_ratio, layout = self.remove_hugepages_blindly(next_coverage, upper_mem_layout, lower_mem_layout, remove_ratio)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        remove_ratio *= 1.2
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        remove_ratio *= 0.7
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option)
-                        return
-                else:
-                    logging.info('could not select by removing hugepages layout blindly (option#4)')
-                    option += 1
-                    self.generate_and_run_layouts(option)
-                    continue
-            elif option == 5:
-                # generate layout blindly
-                logging.info(f'=====> select layout by adding hugepages blindly (option#5) <======')
-                add_ratio, layout = self.add_hugepages_blindly(next_coverage, upper_mem_layout, lower_mem_layout, add_ratio)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        add_ratio *= 0.8
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        add_ratio *= 1.3
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option)
-                        return
-                else:
-                    logging.info('could not select layout by adding hugepages blindly (option#5)')
-                    option += 1
-                    self.generate_and_run_layouts(option)
-                    continue
-            elif option == 6:
-                # select layout blindly
-                logging.info(f'=====> select layout blindly (option#6) <======')
-                layout = self.select_layout_blindly(upper_mem_layout, num_hugepages_to_add)
-                if layout:
-                    last_result = self.run_next_layout(layout)
-                    last_result_real_coverage = self.realMetricCoverage(last_result)
-                    if last_result_real_coverage > lower_real_coverage:
-                        num_hugepages_to_add *= 0.8
-                        continue
-                    elif last_result_real_coverage < upper_real_coverage:
-                        num_hugepages_to_add *= 1.3
-                        continue
-                    else:
-                        self.generate_and_run_layouts(option)
-                        return
-                else:
-                    logging.info('could not select layout blindly (option#6)')
-                    # self.generate_and_run_layouts(option)
-                    continue
-            else:
-                # assert
-                assert False,'unknown option!'
+    def findTlbCoverageLayout(self, df, tlb_coverage_percentage, base_pages, exclude_pages=None):
+        epsilon = 0.5
+        layout = None
+        while layout == None:
+            layout = self._findTlbCoverageLayout(df, tlb_coverage_percentage, base_pages, epsilon, exclude_pages)
+            epsilon += 0.5
+        return layout
 
+    def _findTlbCoverageLayout(self, df, tlb_coverage_percentage, base_pages, epsilon, exclude_pages):
+        # based on the fact that selected pages in base_pages are ordered
+        # from heaviest to the lightest
+        for i in range(len(base_pages)+1):
+            layout = self._findTlbCoverageLayoutBasedOnSubset(df, tlb_coverage_percentage, base_pages[i:], epsilon, exclude_pages)
+            if layout:
+                return layout
+
+    def _findTlbCoverageLayoutBasedOnSubset(self, df, tlb_coverage_percentage, base_pages, epsilon, exclude_pages):
+        total_weight = self.pebsTlbCoverage(base_pages)
+        # use a new list instead of using the existing base_pages list to
+        # keep it sorted according to page weights
+        layout = []
+        for index, row in df.iterrows():
+            weight = row['TLB_COVERAGE']
+            page_number = row['PAGE_NUMBER']
+            if exclude_pages and page_number in exclude_pages:
+                continue
+            if base_pages and page_number in base_pages:
+                # pages from base_pages already included in the total weight
+                # just add them without increasing the total weight
+                layout.append(page_number)
+                continue
+            if (total_weight + weight) <= (tlb_coverage_percentage + epsilon):
+                #print('page: {page} - weight: {weight}'.format(page=page_number, weight=weight))
+                total_weight += weight
+                layout.append(page_number)
+            if total_weight >= (tlb_coverage_percentage - epsilon):
+                break
+
+        if total_weight > (tlb_coverage_percentage + epsilon) \
+                or total_weight < (tlb_coverage_percentage - epsilon):
+            return []
+        # add tailed pages from base_pages that were not selected (because
+        # we are already reached the goal weight)
+        layout += list(set(base_pages) - set(layout))
+        return layout
+    
+    def _findLayouts(self, pebs_df, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts):
+        if len(layouts) == num_layouts:
+            return
+        layout = self.findTlbCoverageLayout(pebs_df, tlb_coverage_percentage, base_pages, exclude_pages)
+        if not layout:
+            return
+        if self.isPagesListUnique(layout, self.layouts):
+            layouts.append(layout)
+        else:
+            return
+        for subset_size in range(len(layout)):
+            for subset in list(itertools.combinations(layout, subset_size+1)):
+                cosubset = set(layout) - set(subset)
+                self._findLayouts(pebs_df, tlb_coverage_percentage, subset, cosubset, num_layouts, layouts)
+                if len(layouts) == num_layouts:
+                    return
+    
+    def findLayouts(self, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts, sort_ascending):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=sort_ascending)
+        return self._findLayouts(pebs_df, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts)
+
+
+    def select_layout_with_sampled_headpages(self, pebs_coverage, include_pages, exclude_pages):
+        head_pages_coverage_threshold = 2
+        all_tail_pages_df = self.pebs_df.query(f'TLB_COVERAGE < {head_pages_coverage_threshold} and PAGE_NUMBER not in {include_pages} and PAGE_NUMBER not in {exclude_pages}')
+        all_tail_pages = all_tail_pages_df['PAGE_NUMBER'].tolist()
+        all_head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {head_pages_coverage_threshold} and PAGE_NUMBER not in {include_pages} and PAGE_NUMBER not in {exclude_pages}')
+        
+        if self.pebsTlbCoverage(include_pages) > pebs_coverage:
+            return []
+        if self.pebsTlbCoverage(exclude_pages) > (100 - pebs_coverage):
+            return []
+        
+        for i in range(len(all_head_pages_df)):        
+            sampled_headpages = all_head_pages_df.sample(frac=0.5)['PAGE_NUMBER'].tolist()
+            search_pages = list(set(all_tail_pages + sampled_headpages) - set(exclude_pages))
+            layout = self.generate_layout_from_base(include_pages, search_pages, pebs_coverage, True)
+            if layout and self.isPagesListUnique(layout, self.layouts):
+                return layout
+        return []
+    
+    def select_all_subsets(self, pebs_coverage, base_pages, exclude_pages, num_layouts, layouts):        
+        if len(layouts) == num_layouts:
+            return
+        layout = self.find_general_layout(pebs_coverage, base_pages, exclude_pages)
+        if not layout:
+            return
+        if self.isPagesListUnique(layout, self.layouts + layouts):
+            layouts.append(layout)
+        else:
+            return
+        for subset_size in range(len(layout)):
+            for subset in list(itertools.combinations(layout, subset_size+1)):
+                cosubset = set(layout) - set(subset)
+                self.select_all_subsets(pebs_coverage, subset, cosubset, num_layouts, layouts)
+                if len(layouts) == num_layouts:
+                    return
+     
+    def generate_and_run_layouts(self):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        selected_head_pages_df = pebs_df.head(3)
+        selected_head_pages = selected_head_pages_df['PAGE_NUMBER'].tolist()
+        
+        head_pages_coverage_threshold = 2
+        all_head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {head_pages_coverage_threshold}')
+        all_head_pages = all_head_pages_df['PAGE_NUMBER'].tolist()
+        
+        last_result = None
+        excluded_headpages = []
+        included_headpages = []
+        deviation_threshold = 0.05
+        
+        for headpages_subset_size in range(len(selected_head_pages)):
+            for headpages_subset in list(itertools.combinations(selected_head_pages, headpages_subset_size+1)):
+                include_pages = list(headpages_subset)
+                exclude_pages = list(set(selected_head_pages) - set(include_pages))
+                layout = self.select_layout_with_sampled_headpages(self.metric_coverage, include_pages, exclude_pages)
+                if layout:
+                    last_result = self.run_next_layout(layout)
+                    deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
+                    if deviation <= deviation_threshold:
+                        excluded_headpages.append(exclude_pages)
+                        included_headpages.append(include_pages)
+        for i in range(len(included_headpages)):
+            if self.last_layout_num >= self.num_layouts:
+                break
+            print(i)
+            exclude_pages = excluded_headpages[i]
+            include_pages = included_headpages[i]
+            
+            mem_layouts = []
+            for i in range(10):
+                layout = self.shuffle_and_generate_layout_from_base(include_pages, exclude_pages, self.metric_coverage)
+                if layout:
+                    mem_layouts.append(layout)
+            for layout in mem_layouts:
+                if self.last_layout_num >= self.num_layouts:
+                    break
+                last_result = self.run_next_layout(layout)
+                deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
+                if deviation > deviation_threshold:
+                    continue
+                    
+        while self.last_layout_num < self.num_layouts:
+            logging.info(f'findLayouts: pebs_coverage={self.metric_coverage}')
+            ascending_layouts = []
+            descending_layouts = []
+            rem_layouts = self.num_layouts - self.last_layout_num
+            self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, ascending_layouts, True)
+            self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, descending_layouts, False)
+            general_mem_layouts = ascending_layouts + descending_layouts
+            logging.info(f'findLayouts returned #{len(general_mem_layouts)}')
+            
+            for general_layout in general_mem_layouts:
+                if self.last_layout_num >= self.num_layouts:
+                    break
+                include_pages = list(set(all_head_pages) & set(general_layout))
+                exclude_pages = list(set(all_head_pages) - set(general_layout))
+                
+                for i in range(10):
+                    layout = self.shuffle_and_generate_layout_from_base(include_pages, exclude_pages, self.metric_coverage)
+                    if not layout:
+                        break
+                    last_result = self.run_next_layout(layout)
+                    deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
+                    if deviation > deviation_threshold:
+                        break
+                
+                # logging.info(f'findLayouts: pebs_coverage={self.metric_coverage} , #include_pages={len(include_pages)} , #exclude_pages={len(exclude_pages)}')
+                # ascending_layouts = []
+                # descending_layouts = []
+                # self.findLayouts(self.metric_coverage, include_pages, exclude_pages, 3, ascending_layouts, True)
+                # self.findLayouts(self.metric_coverage, include_pages, exclude_pages, 3, descending_layouts, False)
+                # mem_layouts = ascending_layouts + descending_layouts
+                # logging.info(f'findLayouts returned #{len(mem_layouts)}')
+                
+                # for layout in mem_layouts:
+                #     if self.last_layout_num >= self.num_layouts:
+                #         break
+                #     last_result = self.run_next_layout(layout)
+                #     deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
+                    # if deviation > deviation_threshold:
+                    #     break                    
+   
     def run(self):
         # Define the initial data samples
         res_df = self.generate_initial_samples()
