@@ -21,7 +21,8 @@ class MosrangeExperiment:
                  memory_footprint_file, pebs_mem_bins_file,
                  collect_reults_cmd, results_file,
                  run_experiment_cmd, exp_root_dir,
-                 num_layouts, metric_name, metric_val) -> None:
+                 num_layouts, metric_name, 
+                 metric_val, metric_coverage) -> None:
         self.last_layout_num = 0
         self.collect_reults_cmd = collect_reults_cmd
         self.results_file = results_file
@@ -31,6 +32,7 @@ class MosrangeExperiment:
         self.exp_root_dir = exp_root_dir
         self.num_layouts = num_layouts
         self.metric_val = metric_val
+        self.metric_coverage = metric_coverage
         self.metric_name = metric_name
         self.layouts = []
         self.layout_names = []
@@ -299,25 +301,20 @@ class MosrangeExperiment:
             elif hugepages_set == all_2mb_set:
                 self.all_2mb_r = row
         
-        min_val = self.all_2mb_r[self.metric_name]
-        max_val = self.all_4kb_r[self.metric_name]
+        all_2mb_metric_val = self.all_2mb_r[self.metric_name]
+        all_4kb_metric_val = self.all_4kb_r[self.metric_name]
+        min_val = min(all_2mb_metric_val, all_4kb_metric_val)
+        max_val = max(all_2mb_metric_val, all_4kb_metric_val)
         
         # TODO: remove the following line after testing mosrange
         self.metric_val = (max_val + min_val) / 2 
         
-        if self.metric_name == 'stlb_hits':
-            min_val = self.all_4kb_r[self.metric_name]
-            max_val = self.all_2mb_r[self.metric_name]
-        self.metric_coverage = (max_val - self.metric_val) / (max_val - min_val)
-        self.metric_coverage *= 100
-        
-        min_stlb_misses = self.all_2mb_r['stlb_misses']
-        max_stlb_misses = self.all_4kb_r['stlb_misses']
-        if self.metric_name == 'stlb_misses':
-            self.estimated_stlb_misses = self.metric_coverage
+        delta = max_val - min_val
+        if self.metric_val is None:
+            self.metric_val = max_val - delta * (self.metric_coverage / 100)
         else:
-            self.estimated_stlb_misses = min_stlb_misses + (self.metric_coverage/100) * (max_stlb_misses - min_stlb_misses)
-    
+            self.metric_coverage = ((max_val - self.metric_val) / delta) * 100
+        
     def get_head_pages(self):
         coverage_threshold = 2
         head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {coverage_threshold}')
@@ -730,7 +727,7 @@ class MosrangeExperiment:
             ascending_layouts = []
             descending_layouts = []
             rem_layouts = self.num_layouts - self.last_layout_num
-            self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, ascending_layouts, True)
+            self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2 + 1, ascending_layouts, True)
             self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, descending_layouts, False)
             general_mem_layouts = ascending_layouts + descending_layouts
             logging.info(f'findLayouts returned #{len(general_mem_layouts)}')
@@ -795,7 +792,8 @@ def parseArguments():
     parser.add_argument('-n', '--num_layouts', required=True, type=int)
     parser.add_argument('-d', '--debug', action='store_true')
     parser.add_argument('-m', '--metric', choices=['stlb_misses', 'stlb_hits', 'walk_cycles'], default='stlb_misses')
-    parser.add_argument('-v', '--metric_value', type=float, required=True)
+    parser.add_argument('-v', '--metric_value', type=float, default=None)
+    parser.add_argument('-p', '--metric_coverage', type=int, default=None)
     return parser.parse_args()
 
 if __name__ == "__main__":
@@ -803,10 +801,16 @@ if __name__ == "__main__":
 
     # profiler = cProfile.Profile()
     # profiler.enable()
+    if args.metric_value is None and args.metric_coverage is None:
+        raise ValueError('Should provide either metric_value or metric_coverage arguments: None was provided!')
+    if args.metric_value is not None and args.metric_coverage is not None:
+        raise ValueError('Should provide either metric_value or metric_coverage arguments: Both were provided!')
+    
     exp = MosrangeExperiment(args.memory_footprint, args.pebs_mem_bins,
                              args.collect_reults_cmd, args.results_file,
                              args.run_experiment_cmd, args.exp_root_dir,
-                             args.num_layouts, args.metric, args.metric_value)
+                             args.num_layouts, args.metric, 
+                             args.metric_value, args.metric_coverage)
     exp.run()
     # profiler.disable()
     # profiler.dump_stats('profile_results.prof')
