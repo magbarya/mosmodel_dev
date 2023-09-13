@@ -40,6 +40,6 @@ $(MEASUREMENTS): $(MEMORY_FOOTPRINT_FILE) $(PEBS_FILE) $(MOSRANGE_COLLECT_RESULT
 		--num_layouts=$(NUM_LAYOUTS) \
 		--pebs_mem_bins=$(MEM_BINS_2MB_CSV_FILE) \
 		--metric=$(MOSRANGE_METRIC_NAME) \
-		--metric_value=$(MOSRANGE_METRIC_VALUE)
+		--metric_coverage=$(MOSRANGE_METRIC_COVERAGE)
 
 .PHONY: $(MODULE_NAME)
