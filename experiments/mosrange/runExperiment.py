@@ -727,7 +727,7 @@ class MosrangeExperiment:
             ascending_layouts = []
             descending_layouts = []
             rem_layouts = self.num_layouts - self.last_layout_num
-            self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2 + 1, ascending_layouts, True)
+            self.findLayouts(self.metric_coverage, [], [], (rem_layouts // 2) + 1, ascending_layouts, True)
             self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, descending_layouts, False)
             general_mem_layouts = ascending_layouts + descending_layouts
             logging.info(f'findLayouts returned #{len(general_mem_layouts)}')
