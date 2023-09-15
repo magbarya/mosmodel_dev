@@ -67,6 +67,7 @@ class MosrangeExperiment:
         
         self.all_4kb_layout = []
         self.all_2mb_layout = [i for i in range(self.num_hugepages)]
+        self.all_pebs_pages_layout = self.pebs_pages
          
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
@@ -143,16 +144,19 @@ class MosrangeExperiment:
         expected_tlb_coverage = df['TLB_COVERAGE'].sum()
         return expected_tlb_coverage
 
-    def realMetricCoverage(self, layout_results):
-        min_val = self.all_2mb_r[self.metric_name]
-        max_val = self.all_4kb_r[self.metric_name]
-        if self.metric_name == 'stlb_hits':
-            min_val = self.all_4kb_r[self.metric_name]
-            max_val = self.all_2mb_r[self.metric_name]
+    def realMetricCoverage(self, layout_results, metric_name=None):
+        if metric_name is None:
+            metric_name = self.metric_name
+        layout_metric_val = layout_results[metric_name]
+        all_2mb_metric_val = self.all_2mb_r[metric_name]
+        all_4kb_metric_val = self.all_4kb_r[metric_name]
+        min_val = min(all_2mb_metric_val, all_4kb_metric_val)
+        max_val = max(all_2mb_metric_val, all_4kb_metric_val)
         
-        layout_val = layout_results[self.metric_name]
-        coverage = (max_val - layout_val) / (max_val - min_val)
-        coverage *= 100
+        # either metric_val or metric_coverage will be provided
+        delta = max_val - min_val
+        coverage = ((max_val - layout_metric_val) / delta) * 100
+        
         return coverage
 
     def generate_layout_from_pebs(self, pebs_coverage, pebs_df):
@@ -290,30 +294,59 @@ class MosrangeExperiment:
                 break
         return lower_layout, upper_layout
 
-    def update_estimated_stlb_misses(self, res_df):
-        max_num_hugepages = 0
+    def add_missing_pages_to_pebs(self):
+        pebs_pages = self.pebs_df['PAGE_NUMBER'].tolist()
+        missing_pages = list(set(self.all_2mb_layout) - set(pebs_pages))
+        #self.total_misses
+        all_pebs_real_coverage = self.realMetricCoverage(self.all_pebs_r, 'stlb_misses')
+        # normalize pages recorded by pebs based on their real coverage
+        ratio = all_pebs_real_coverage / 100
+        self.pebs_df['TLB_COVERAGE'] *= ratio
+        self.pebs_df['NUM_ACCESSES'] = (self.pebs_df['NUM_ACCESSES'] * ratio).astype(int)
+        # add missing pages with a unified coverage ratio
+        missing_pages_total_coverage = 100 - all_pebs_real_coverage
+        total_missing_pages = len(missing_pages)
+        missing_pages_coverage_ratio = missing_pages_total_coverage / total_missing_pages
+        # update total_misses acording to the new ratio
+        old_total_misses = self.total_misses
+        self.total_misses *= ratio
+        missing_pages_total_misses = self.total_misses - old_total_misses
+        missing_pages_misses_ratio = missing_pages_total_misses / total_missing_pages
+        # update pebs_df dataframe
+        missing_pages_df = pd.DataFrame(
+            {'PAGE_NUMBER': missing_pages, 
+             'NUM_ACCESSES': missing_pages_misses_ratio, 
+             'TLB_COVERAGE': missing_pages_coverage_ratio})
+        self.pebs_df = pd.concat([self.pebs_df, missing_pages_df], ignore_index=True)
+
+    
+    def update_metric_values(self, res_df):
         all_4kb_set = set(self.all_4kb_layout)
         all_2mb_set = set(self.all_2mb_layout)
+        all_pebs_set= set(self.all_pebs_pages_layout)
         for index, row in res_df.iterrows():
             hugepages_set = set(row['hugepages'])
             if hugepages_set == all_4kb_set:
                 self.all_4kb_r = row
             elif hugepages_set == all_2mb_set:
                 self.all_2mb_r = row
+            elif hugepages_set == all_pebs_set:
+                self.all_pebs_r = row
         
         all_2mb_metric_val = self.all_2mb_r[self.metric_name]
         all_4kb_metric_val = self.all_4kb_r[self.metric_name]
         min_val = min(all_2mb_metric_val, all_4kb_metric_val)
         max_val = max(all_2mb_metric_val, all_4kb_metric_val)
         
-        # TODO: remove the following line after testing mosrange
-        self.metric_val = (max_val + min_val) / 2 
-        
+        # either metric_val or metric_coverage will be provided
         delta = max_val - min_val
         if self.metric_val is None:
             self.metric_val = max_val - delta * (self.metric_coverage / 100)
         else:
             self.metric_coverage = ((max_val - self.metric_val) / delta) * 100
+        
+        # add missing pages to pebs
+        self.add_missing_pages_to_pebs()
         
     def get_head_pages(self):
         coverage_threshold = 2
@@ -338,13 +371,13 @@ class MosrangeExperiment:
         res_df = self.get_runs_measurements()
         num_prev_samples = len(res_df)
         # mem_layouts = self.moselect_initial_samples()
-        mem_layouts = [self.all_4kb_layout, self.all_2mb_layout]
+        mem_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
         
         for i, mem_layout in enumerate(mem_layouts):
             logging.info(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)} (x2MB) hugepages')
             self.run_next_layout(mem_layout)            
         res_df = self.get_runs_measurements()
-        self.update_estimated_stlb_misses(res_df)
+        self.update_metric_values(res_df)
         return res_df
     
     def generate_layout_from_base(self, base_pages, search_space, coverage, sort=True):
