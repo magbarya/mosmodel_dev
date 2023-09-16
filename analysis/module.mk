@@ -4,23 +4,16 @@ SUBMODULES := \
 	growing_window_2m \
 	random_window_2m \
 	sliding_window \
-	extra_random_2m \
 	linear_models_coeffs \
 	pebs_tlb_miss_trace \
-	subgroups_windows \
-	subgroups_uniformly_windows \
-	subgroups_head_pages \
-	static_auto_mosalloc \
-	dynamic_auto_mosalloc \
+	fixed_selector \
+	genetic_selector \
 	moselect \
 	bayesian_optimization \
-	dynamic_grouping \
-	runtime_range \
-	genetic_scan \
-	smart_genetic_scan \
+	mosrange \
 	mosmodel \
-	extra_data \
 	all_data
+
 SUBMODULES := $(addprefix $(MODULE_NAME)/,$(SUBMODULES))
 
 ARRANGE_DATA_TO_PLOT := $(MODULE_NAME)/arrangeDataToPlot.py

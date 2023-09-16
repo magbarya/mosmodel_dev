@@ -3,21 +3,14 @@ SUBMODULES := \
 	memory_footprint \
 	single_page_size \
 	pebs_tlb_miss_trace \
-	static_auto_mosalloc \
-	dynamic_auto_mosalloc \
+	fixed_selector \
+	genetic_selector \
 	moselect \
 	bayesian_optimization \
-	dynamic_grouping \
-	runtime_range \
+	mosrange \
 	growing_window_2m \
 	random_window_2m \
-	extra_random_2m \
-	sliding_window \
-	subgroups_windows \
-	subgroups_uniformly_windows \
-	subgroups_head_pages \
-	genetic_scan \
-	smart_genetic_scan
+	sliding_window
 
 EXPERIMENTS_MODULE_NAME := $(MODULE_NAME)
 EXPERIMENTS_SUBMODULES := $(addprefix $(EXPERIMENTS_MODULE_NAME)/,$(SUBMODULES))
@@ -44,6 +37,7 @@ COLLECT_MEMORY_FOOTPRINT := $(SCRIPTS_ROOT_DIR)/collectMemoryFootprint.py
 
 export EXPERIMENTS_ROOT := $(ROOT_DIR)/$(MODULE_NAME)
 export EXPERIMENTS_TEMPLATE := $(EXPERIMENTS_ROOT)/template.mk
+export EXPERIMENTS_VARS_TEMPLATE := $(EXPERIMENTS_ROOT)/template_vars.mk
 NUMBER_OF_SOCKETS := $(shell ls -d /sys/devices/system/node/node*/ | wc -w)
 export BOUND_MEMORY_NODE := $$(( $(NUMBER_OF_SOCKETS) - 1 ))
 export NUMBER_OF_SOCKETS := $(shell ls -d /sys/devices/system/node/node*/ | wc -w)

@@ -44,7 +44,7 @@ class BenchmarkRun:
             self._does_output_dir_exist = False
 
         log_file_name = self._output_dir + '/benchmark.log'
-        self._log_file = open(log_file_name, 'w')
+        self._log_file = open(log_file_name, 'w+')
 
     def __del__(self):
         if hasattr(self, "_log_file"):

@@ -93,12 +93,13 @@ class Utils:
         if pebs_df.empty:
             sys.exit('Input file does not contain page accesses information about the brk pool!')
         pebs_df = pebs_df[['PAGE_NUMBER', 'NUM_ACCESSES']]
-        pebs_df = pebs_df.reset_index()
 
         # transform NUM_ACCESSES from absolute number to percentage
         total_access = pebs_df['NUM_ACCESSES'].sum()
         pebs_df['TLB_COVERAGE'] = pebs_df['NUM_ACCESSES'].mul(100).divide(total_access)
         pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        
+        pebs_df = pebs_df.reset_index()
         
         return pebs_df
     
