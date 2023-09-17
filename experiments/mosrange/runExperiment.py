@@ -769,7 +769,7 @@ class MosrangeExperiment:
                 if self.last_layout_num >= self.num_layouts:
                     break
 
-                last_result = self.run_next_layout(layout)
+                last_result = self.run_next_layout(general_layout)
                 deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                 if deviation > deviation_threshold:
                     continue
