@@ -21,7 +21,7 @@ class MosrangeExperiment:
                  memory_footprint_file, pebs_mem_bins_file,
                  collect_reults_cmd, results_file,
                  run_experiment_cmd, exp_root_dir,
-                 num_layouts, metric_name, 
+                 num_layouts, metric_name,
                  metric_val, metric_coverage) -> None:
         self.last_layout_num = 0
         self.collect_reults_cmd = collect_reults_cmd
@@ -64,11 +64,11 @@ class MosrangeExperiment:
             self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
         # load results file
         self.results_df = self.get_runs_measurements()
-        
+
         self.all_4kb_layout = []
         self.all_2mb_layout = [i for i in range(self.num_hugepages)]
         self.all_pebs_pages_layout = self.pebs_pages
-         
+
     def run_command(command, out_dir):
         if not os.path.exists(out_dir):
             os.makedirs(out_dir)
@@ -152,11 +152,11 @@ class MosrangeExperiment:
         all_4kb_metric_val = self.all_4kb_r[metric_name]
         min_val = min(all_2mb_metric_val, all_4kb_metric_val)
         max_val = max(all_2mb_metric_val, all_4kb_metric_val)
-        
+
         # either metric_val or metric_coverage will be provided
         delta = max_val - min_val
         coverage = ((max_val - layout_metric_val) / delta) * 100
-        
+
         return coverage
 
     def generate_layout_from_pebs(self, pebs_coverage, pebs_df):
@@ -176,7 +176,7 @@ class MosrangeExperiment:
             return []
         logging.debug(f'generate_layout_from_pebs(): found layout of length: {len(mem_layout)}')
         return mem_layout
-    
+
     def split_pages_to_working_sets(self, upper_pages, lower_pages):
         pebs_set = set(self.pebs_df['PAGE_NUMBER'].to_list())
         upper_set = set(upper_pages)
@@ -267,19 +267,19 @@ class MosrangeExperiment:
         if res_df.empty:
             return res_df
         res_df['hugepages'] = None
-        for index, row in res_df.iterrows():            
+        for index, row in res_df.iterrows():
             layout_name = row['layout']
             mem_layout_pages = Utils.load_layout_hugepages(layout_name, self.exp_root_dir)
             res_df.at[index, 'hugepages'] = mem_layout_pages
         res_df = res_df.query(f'layout in {self.layout_names}').reset_index(drop=True)
         logging.info(f'** kept results of {len(res_df)} collected layouts **')
         self.results_df = res_df
-        
+
         # print results of previous runs
         for index, row in res_df.iterrows():
             logging.debug(f'{row["layout"]}: coverage={self.pebsTlbCoverage(list(row["hugepages"]))} ({len(row["hugepages"])} x hugepages), runtime={row["cpu_cycles"]} , tlb-misses={row["stlb_misses"]}')
         return res_df
-    
+
     def get_surrounding_layouts(self, res_df):
         # sort pebs by stlb-misses
         df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
@@ -314,12 +314,12 @@ class MosrangeExperiment:
         missing_pages_misses_ratio = missing_pages_total_misses / total_missing_pages
         # update pebs_df dataframe
         missing_pages_df = pd.DataFrame(
-            {'PAGE_NUMBER': missing_pages, 
-             'NUM_ACCESSES': missing_pages_misses_ratio, 
+            {'PAGE_NUMBER': missing_pages,
+             'NUM_ACCESSES': missing_pages_misses_ratio,
              'TLB_COVERAGE': missing_pages_coverage_ratio})
         self.pebs_df = pd.concat([self.pebs_df, missing_pages_df], ignore_index=True)
 
-    
+
     def update_metric_values(self, res_df):
         all_4kb_set = set(self.all_4kb_layout)
         all_2mb_set = set(self.all_2mb_layout)
@@ -332,28 +332,28 @@ class MosrangeExperiment:
                 self.all_2mb_r = row
             elif hugepages_set == all_pebs_set:
                 self.all_pebs_r = row
-        
+
         all_2mb_metric_val = self.all_2mb_r[self.metric_name]
         all_4kb_metric_val = self.all_4kb_r[self.metric_name]
         min_val = min(all_2mb_metric_val, all_4kb_metric_val)
         max_val = max(all_2mb_metric_val, all_4kb_metric_val)
-        
+
         # either metric_val or metric_coverage will be provided
         delta = max_val - min_val
         if self.metric_val is None:
             self.metric_val = max_val - delta * (self.metric_coverage / 100)
         else:
             self.metric_coverage = ((max_val - self.metric_val) / delta) * 100
-        
+
         # add missing pages to pebs
-        self.add_missing_pages_to_pebs()
-        
+        # self.add_missing_pages_to_pebs()
+
     def get_head_pages(self):
         coverage_threshold = 2
         head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {coverage_threshold}')
         head_pages_list = head_pages_df['PAGE_NUMBER'].tolist()
         return head_pages_list
-    
+
     def get_closest_moselect_layout(self):
         moselect_layouts = self.moselect_initial_samples()
         min_coverage_delta = 100
@@ -366,20 +366,20 @@ class MosrangeExperiment:
                 closest_layout = l
         assert l is not None
         return l
-            
+
     def generate_initial_samples(self):
         res_df = self.get_runs_measurements()
         num_prev_samples = len(res_df)
         # mem_layouts = self.moselect_initial_samples()
         mem_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
-        
+
         for i, mem_layout in enumerate(mem_layouts):
             logging.info(f'** Producing initial sample #{i} using a memory layout with {len(mem_layout)} (x2MB) hugepages')
-            self.run_next_layout(mem_layout)            
+            self.run_next_layout(mem_layout)
         res_df = self.get_runs_measurements()
         self.update_metric_values(res_df)
         return res_df
-    
+
     def generate_layout_from_base(self, base_pages, search_space, coverage, sort=True):
         logging.debug(f'generate_layout_from_base(): len(base_pages)={len(base_pages)} , len(search_space)={len(search_space)} , coverage={coverage}')
         expected_coverage = coverage - self.pebsTlbCoverage(base_pages)
@@ -395,9 +395,9 @@ class MosrangeExperiment:
 
     def shuffle_and_generate_layout_from_base(self, base_pages, exclude_pages, coverage):
         logging.debug(f'shuffle_and_generate_layout_from_base(): len(base_pages)={len(base_pages)} , len(exclude_pages)={len(exclude_pages)} , coverage={coverage}')
-        expected_coverage = coverage - self.pebsTlbCoverage(base_pages)        
+        expected_coverage = coverage - self.pebsTlbCoverage(base_pages)
         df = self.pebs_df.query(f'PAGE_NUMBER not in {exclude_pages+base_pages}')
-        
+
         iterations_len = min(100, len(df))
         for i in range(iterations_len):
             df = df.sample(frac=1).reset_index(drop=True)
@@ -421,7 +421,7 @@ class MosrangeExperiment:
         df = self.pebs_df.query(f'PAGE_NUMBER in {base_pages}')
         df = df.sort_values('TLB_COVERAGE', ascending=False)
         total_weight = df['TLB_COVERAGE'].sum()
-        # if the coverage of the base_pages less than expected, 
+        # if the coverage of the base_pages less than expected,
         # then we can not remove pages from it
         if total_weight < (pebs_coverage - self.search_pebs_threshold):
             return []
@@ -447,7 +447,7 @@ class MosrangeExperiment:
         Utils.write_layout(layout_name, mem_layout, self.exp_root_dir, self.brk_footprint, self.mmap_footprint)
         self.layouts.append(mem_layout)
         self.layout_names.append(layout_name)
-        
+
     def layout_was_run(self, layout_name, mem_layout):
         prev_layout_res = None
         if not self.results_df.empty:
@@ -461,10 +461,10 @@ class MosrangeExperiment:
         if set(prev_layout_hugepages) != set(mem_layout):
             # the existing layout has different hugepages set than the new one
             return False, None
-        
+
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
-        
+
     def run_workload(self, mem_layout, layout_name):
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
         if found:
@@ -472,11 +472,11 @@ class MosrangeExperiment:
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
             return prev_res
-        
+
         self.write_layout(layout_name, mem_layout)
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_cmd = f'{self.run_experiment_cmd} {layout_name}'
-        
+
         logging.info('-------------------------------------------')
         logging.info(f'*** start running {layout_name} with {len(mem_layout)} hugepages ***')
         logging.info(f'start running workload')
@@ -484,17 +484,17 @@ class MosrangeExperiment:
         logging.debug(f'\tscript: {run_cmd}')
         logging.info(f'\tlayout: {layout_name}')
         logging.info(f'\t#hugepages: {len(mem_layout)}')
-        
+
         ret_code = MosrangeExperiment.run_command(run_cmd, out_dir)
         if ret_code != 0:
             raise RuntimeError(f'Error: running {layout_name} failed with error code: {ret_code}')
-        
+
         layout_res = self.get_layout_results(layout_name)
         tlb_misses = layout_res['stlb_misses']
         tlb_hits = layout_res['stlb_hits']
         walk_cycles = layout_res['walk_cycles']
         runtime = layout_res['cpu_cycles']
-        
+
         logging.info('-------------------------------------------')
         logging.info(f'Results:')
         logging.info(f'\tstlb-misses={tlb_misses/1e9:.2f} Billions')
@@ -510,14 +510,14 @@ class MosrangeExperiment:
             if set(l) == pages_set:
                 return False
         return True
-    
+
     def find_general_layout(self, pebs_coverage, include_pages, exclude_pages, sort_ascending=False):
         df = self.pebs_df.query(f'PAGE_NUMBER not in {exclude_pages}')
         df = df.sort_values('TLB_COVERAGE', ascending=sort_ascending)
         search_space = df['PAGE_NUMBER'].to_list()
         layout = self.generate_layout_from_base(include_pages, search_space, pebs_coverage)
         return layout
-        
+
     def select_layout_from_subsets(self, pebs_coverage, include_pages, exclude_pages, layouts, sort_ascending=False):
         layout = self.find_general_layout(pebs_coverage, include_pages, exclude_pages, sort_ascending)
         if not layout:
@@ -525,7 +525,7 @@ class MosrangeExperiment:
         if self.isPagesListUnique(layout, self.layouts + layouts):
             layouts.append(layout)
             return
-        
+
         # for i in range(len(layout)):
         #     self.select_layout_from_subsets(pebs_coverage, layout[i:], layout[:i], layouts, sort_ascending)
         #     if self.isPagesListUnique(layout, self.layouts + layouts):
@@ -552,7 +552,7 @@ class MosrangeExperiment:
             if l and self.isPagesListUnique(l, self.layouts):
                 return l
         return []
-    
+
     def remove_hugepages_blindly(self, pebs_coverage, upper_mem_layout, lower_mem_layout, ratio=None):
         if ratio is None:
             upper_layout_pebs = self.pebsTlbCoverage(upper_mem_layout)
@@ -560,16 +560,16 @@ class MosrangeExperiment:
             ratio = abs(lower_layout_pebs - pebs_coverage) / abs(lower_layout_pebs - upper_layout_pebs)
             if ratio >= 1:
                 return ratio, []
-        
+
         hugepages_only_in_lower = list(set(lower_mem_layout) - set(upper_mem_layout))
         remove_set_size = int(len(hugepages_only_in_lower) * ratio)
         remove_set = hugepages_only_in_lower[:remove_set_size]
         layout = list(set(lower_mem_layout) - set(remove_set))
-        
+
         if self.isPagesListUnique(layout, self.layouts):
             return ratio, layout
         return ratio, []
-    
+
     def add_hugepages_blindly(self, pebs_coverage, upper_mem_layout, lower_mem_layout, ratio=None):
         if ratio is None:
             upper_layout_pebs = self.pebsTlbCoverage(upper_mem_layout)
@@ -577,16 +577,16 @@ class MosrangeExperiment:
             ratio = abs(pebs_coverage - upper_layout_pebs) / abs(lower_layout_pebs - upper_layout_pebs)
             if ratio >= 1:
                 return ratio, []
-        
+
         hugepages_only_in_lower = list(set(lower_mem_layout) - set(upper_mem_layout))
         add_set_size = int(len(hugepages_only_in_lower) * ratio)
         add_set = hugepages_only_in_lower[:add_set_size]
         layout = list(set(upper_mem_layout) | set(add_set))
-                
+
         if self.isPagesListUnique(layout, self.layouts):
             return ratio, layout
         return ratio, []
-    
+
     def select_layout_blindly(self, upper_mem_layout, num_hugepages_to_add=None):
         layout = []
         add_set = list(set(self.all_pages) - set(upper_mem_layout))
@@ -598,14 +598,14 @@ class MosrangeExperiment:
             random_subset = random.sample(add_set, num_hugepages_to_add)
             layout = list(set(upper_mem_layout) | set(random_subset))
         return layout
-    
+
     def run_next_layout(self, mem_layout):
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
         logging.info(f'run workload under {layout_name} with {len(mem_layout)} hugepages')
         last_result = self.run_workload(mem_layout, layout_name)
         return last_result
-    
+
     def findTlbCoverageLayout(self, df, tlb_coverage_percentage, base_pages, exclude_pages=None):
         epsilon = 0.5
         layout = None
@@ -651,7 +651,7 @@ class MosrangeExperiment:
         # we are already reached the goal weight)
         layout += list(set(base_pages) - set(layout))
         return layout
-    
+
     def _findLayouts(self, pebs_df, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts):
         if len(layouts) == num_layouts:
             return
@@ -668,7 +668,7 @@ class MosrangeExperiment:
                 self._findLayouts(pebs_df, tlb_coverage_percentage, subset, cosubset, num_layouts, layouts)
                 if len(layouts) == num_layouts:
                     return
-    
+
     def findLayouts(self, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts, sort_ascending):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=sort_ascending)
         return self._findLayouts(pebs_df, tlb_coverage_percentage, base_pages, exclude_pages, num_layouts, layouts)
@@ -679,21 +679,21 @@ class MosrangeExperiment:
         all_tail_pages_df = self.pebs_df.query(f'TLB_COVERAGE < {head_pages_coverage_threshold} and PAGE_NUMBER not in {include_pages} and PAGE_NUMBER not in {exclude_pages}')
         all_tail_pages = all_tail_pages_df['PAGE_NUMBER'].tolist()
         all_head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {head_pages_coverage_threshold} and PAGE_NUMBER not in {include_pages} and PAGE_NUMBER not in {exclude_pages}')
-        
+
         if self.pebsTlbCoverage(include_pages) > pebs_coverage:
             return []
         if self.pebsTlbCoverage(exclude_pages) > (100 - pebs_coverage):
             return []
-        
-        for i in range(len(all_head_pages_df)):        
+
+        for i in range(len(all_head_pages_df)):
             sampled_headpages = all_head_pages_df.sample(frac=0.5)['PAGE_NUMBER'].tolist()
             search_pages = list(set(all_tail_pages + sampled_headpages) - set(exclude_pages))
             layout = self.generate_layout_from_base(include_pages, search_pages, pebs_coverage, True)
             if layout and self.isPagesListUnique(layout, self.layouts):
                 return layout
         return []
-    
-    def select_all_subsets(self, pebs_coverage, base_pages, exclude_pages, num_layouts, layouts):        
+
+    def select_all_subsets(self, pebs_coverage, base_pages, exclude_pages, num_layouts, layouts):
         if len(layouts) == num_layouts:
             return
         layout = self.find_general_layout(pebs_coverage, base_pages, exclude_pages)
@@ -709,21 +709,21 @@ class MosrangeExperiment:
                 self.select_all_subsets(pebs_coverage, subset, cosubset, num_layouts, layouts)
                 if len(layouts) == num_layouts:
                     return
-     
+
     def generate_and_run_layouts(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         selected_head_pages_df = pebs_df.head(3)
         selected_head_pages = selected_head_pages_df['PAGE_NUMBER'].tolist()
-        
+
         head_pages_coverage_threshold = 2
         all_head_pages_df = self.pebs_df.query(f'TLB_COVERAGE >= {head_pages_coverage_threshold}')
         all_head_pages = all_head_pages_df['PAGE_NUMBER'].tolist()
-        
+
         last_result = None
         excluded_headpages = []
         included_headpages = []
         deviation_threshold = 0.05
-        
+
         for headpages_subset_size in range(len(selected_head_pages)):
             for headpages_subset in list(itertools.combinations(selected_head_pages, headpages_subset_size+1)):
                 include_pages = list(headpages_subset)
@@ -741,7 +741,7 @@ class MosrangeExperiment:
             print(i)
             exclude_pages = excluded_headpages[i]
             include_pages = included_headpages[i]
-            
+
             mem_layouts = []
             for i in range(10):
                 layout = self.shuffle_and_generate_layout_from_base(include_pages, exclude_pages, self.metric_coverage)
@@ -754,7 +754,7 @@ class MosrangeExperiment:
                 deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                 if deviation > deviation_threshold:
                     continue
-                    
+
         while self.last_layout_num < self.num_layouts:
             logging.info(f'findLayouts: pebs_coverage={self.metric_coverage}')
             ascending_layouts = []
@@ -764,13 +764,20 @@ class MosrangeExperiment:
             self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, descending_layouts, False)
             general_mem_layouts = ascending_layouts + descending_layouts
             logging.info(f'findLayouts returned #{len(general_mem_layouts)}')
-            
+
             for general_layout in general_mem_layouts:
                 if self.last_layout_num >= self.num_layouts:
                     break
+
+                if general_layout and self.isPagesListUnique(general_layout, self.layouts):
+                    last_result = self.run_next_layout(general_layout)
+                    deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
+                    if deviation > deviation_threshold:
+                        continue
+
                 include_pages = list(set(all_head_pages) & set(general_layout))
                 exclude_pages = list(set(all_head_pages) - set(general_layout))
-                
+
                 for i in range(10):
                     layout = self.shuffle_and_generate_layout_from_base(include_pages, exclude_pages, self.metric_coverage)
                     if not layout:
@@ -779,7 +786,7 @@ class MosrangeExperiment:
                     deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                     if deviation > deviation_threshold:
                         break
-                
+
                 # logging.info(f'findLayouts: pebs_coverage={self.metric_coverage} , #include_pages={len(include_pages)} , #exclude_pages={len(exclude_pages)}')
                 # ascending_layouts = []
                 # descending_layouts = []
@@ -787,15 +794,15 @@ class MosrangeExperiment:
                 # self.findLayouts(self.metric_coverage, include_pages, exclude_pages, 3, descending_layouts, False)
                 # mem_layouts = ascending_layouts + descending_layouts
                 # logging.info(f'findLayouts returned #{len(mem_layouts)}')
-                
+
                 # for layout in mem_layouts:
                 #     if self.last_layout_num >= self.num_layouts:
                 #         break
                 #     last_result = self.run_next_layout(layout)
                 #     deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                     # if deviation > deviation_threshold:
-                    #     break                    
-   
+                    #     break
+
     def run(self):
         # Define the initial data samples
         res_df = self.generate_initial_samples()
@@ -806,7 +813,7 @@ class MosrangeExperiment:
             logging.info(f'No more layouts to run for the experiment:\n{self.exp_root_dir}')
             logging.info('================================================')
             return
-        
+
         self.generate_and_run_layouts()
 
         logging.info('================================================')
@@ -838,11 +845,11 @@ if __name__ == "__main__":
         raise ValueError('Should provide either metric_value or metric_coverage arguments: None was provided!')
     if args.metric_value is not None and args.metric_coverage is not None:
         raise ValueError('Should provide either metric_value or metric_coverage arguments: Both were provided!')
-    
+
     exp = MosrangeExperiment(args.memory_footprint, args.pebs_mem_bins,
                              args.collect_reults_cmd, args.results_file,
                              args.run_experiment_cmd, args.exp_root_dir,
-                             args.num_layouts, args.metric, 
+                             args.num_layouts, args.metric,
                              args.metric_value, args.metric_coverage)
     exp.run()
     # profiler.disable()
