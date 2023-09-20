@@ -346,7 +346,7 @@ class MosrangeExperiment:
             self.metric_coverage = ((max_val - self.metric_val) / delta) * 100
 
         # add missing pages to pebs
-        # self.add_missing_pages_to_pebs()
+        self.add_missing_pages_to_pebs()
 
     def get_head_pages(self):
         coverage_threshold = 2
