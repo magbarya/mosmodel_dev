@@ -609,7 +609,7 @@ class MosrangeExperiment:
     def findTlbCoverageLayout(self, df, tlb_coverage_percentage, base_pages, exclude_pages=None):
         epsilon = 0.5
         layout = None
-        while layout == None:
+        while not layout:
             layout = self._findTlbCoverageLayout(df, tlb_coverage_percentage, base_pages, epsilon, exclude_pages)
             epsilon += 0.5
         return layout
@@ -619,8 +619,9 @@ class MosrangeExperiment:
         # from heaviest to the lightest
         for i in range(len(base_pages)+1):
             layout = self._findTlbCoverageLayoutBasedOnSubset(df, tlb_coverage_percentage, base_pages[i:], epsilon, exclude_pages)
-            if layout:
+            if layout and self.isPagesListUnique(layout, self.layouts):
                 return layout
+            return None
 
     def _findTlbCoverageLayoutBasedOnSubset(self, df, tlb_coverage_percentage, base_pages, epsilon, exclude_pages):
         total_weight = self.pebsTlbCoverage(base_pages)
