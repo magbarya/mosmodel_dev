@@ -846,12 +846,12 @@ class MosrangeExperiment:
         # Define the initial data samples
         res_df = self.generate_initial_samples()
 
-        num_layouts = max(0, (self.num_layouts - len(res_df)))
-        if num_layouts == 0:
-            logging.info('================================================')
-            logging.info(f'No more layouts to run for the experiment:\n{self.exp_root_dir}')
-            logging.info('================================================')
-            return
+        # num_layouts = max(0, (self.num_layouts - len(res_df)))
+        # if num_layouts == 0:
+        #     logging.info('================================================')
+        #     logging.info(f'No more layouts to run for the experiment:\n{self.exp_root_dir}')
+        #     logging.info('================================================')
+        #     return
 
         self.generate_and_run_layouts()
 
