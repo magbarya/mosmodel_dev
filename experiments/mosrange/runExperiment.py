@@ -307,6 +307,8 @@ class MosrangeExperiment:
         # add missing pages with a unified coverage ratio
         missing_pages_total_coverage = 100 - all_pebs_real_coverage
         total_missing_pages = len(missing_pages)
+        if total_missing_pages == 0:
+            return
         missing_pages_coverage_ratio = missing_pages_total_coverage / total_missing_pages
         # update total_misses acording to the new ratio
         old_total_misses = self.total_misses
