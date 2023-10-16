@@ -859,8 +859,9 @@ class MosrangeExperiment:
 
     def fixedselect(self, pebs_df):
         layouts = []
+        pebs_df = pebs_df.sort_values('NUM_ACCESSES', ascending=True)
         self._findLayouts(pebs_df, self.metric_coverage, [], [], 10, layouts)
-        pebs_df = self.pebs_df.sort_values('NUM_ACCESSES', ascending=False)
+        pebs_df = pebs_df.sort_values('NUM_ACCESSES', ascending=False)
         self._findLayouts(pebs_df, self.metric_coverage, [], [], 10, layouts)
         return layouts
     
@@ -868,11 +869,11 @@ class MosrangeExperiment:
         self.num_generated_layouts = 0
         layouts = []
         pebs_df = self.pebs_df.query(f'PAGE_NUMBER % 2 == 0')
-        layouts.append(self.fixedselect(pebs_df))
+        layouts += self.fixedselect(pebs_df)
         pebs_df = self.pebs_df.query(f'PAGE_NUMBER % 2 == 1')
-        layouts.append(self.fixedselect(pebs_df))
+        layouts += self.fixedselect(pebs_df)
         pebs_df = self.pebs_df.copy()
-        layouts.append(self.fixedselect(pebs_df))
+        layouts += self.fixedselect(pebs_df)
         for mem_layout in layouts:
             if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
                 self.run_next_layout(mem_layout)
