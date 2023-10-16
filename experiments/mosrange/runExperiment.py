@@ -1001,6 +1001,7 @@ class MosrangeExperiment:
         self.moselect(self.moselect_initial_samples(True, True))
         
     def run(self):
+        self.generate_initial_samples()
         self.run_moselect()
         self.run_fixedselect()
         self.run_geneticselect()
