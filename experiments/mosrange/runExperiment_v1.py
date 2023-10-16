@@ -23,7 +23,6 @@ class MosrangeExperiment:
                  run_experiment_cmd, exp_root_dir,
                  num_layouts, metric_name,
                  metric_val, metric_coverage) -> None:
-        self.num_generated_layouts = 0
         self.last_layout_num = 0
         self.collect_reults_cmd = collect_reults_cmd
         self.results_file = results_file
@@ -242,10 +241,10 @@ class MosrangeExperiment:
                 buckets_weights[selected_index] -= weight
         return group
 
-    def moselect_initial_samples(self, start_from_tail=False, fill_min_buckets_first=True):
+    def moselect_initial_samples(self):
         # desired weights for each group layout
         buckets_weights = [56, 28, 14]
-        group = self.fill_buckets(buckets_weights, start_from_tail, fill_min_buckets_first)
+        group = self.fill_buckets(buckets_weights)
         mem_layouts = []
         # create eight layouts as all subgroups of these three group layouts
         for subset_size in range(len(group)+1):
@@ -355,17 +354,6 @@ class MosrangeExperiment:
         head_pages_list = head_pages_df['PAGE_NUMBER'].tolist()
         return head_pages_list
 
-    def get_moselect_all_initial_layouts(self):
-        layouts = []
-        moselect_layouts1 = self.moselect_initial_samples(False, True)
-        moselect_layouts2 = self.moselect_initial_samples(False, False)
-        moselect_layouts3 = self.moselect_initial_samples(True, False)
-        moselect_layouts4 = self.moselect_initial_samples(True, True)
-        for mem_layout in (moselect_layouts1+moselect_layouts2+moselect_layouts3+moselect_layouts4):
-            if self.isPagesListUnique(mem_layout, layouts):
-                layouts.append(mem_layout)
-        return layouts
-        
     def get_closest_moselect_layout(self):
         moselect_layouts = self.moselect_initial_samples()
         min_coverage_delta = 100
@@ -460,13 +448,6 @@ class MosrangeExperiment:
         self.layouts.append(mem_layout)
         self.layout_names.append(layout_name)
 
-    def find_layout_results(self, layout):
-        for index, row in self.results_df.iterrows():
-            prev_layout_hugepages = row['hugepages']
-            if set(prev_layout_hugepages) == set(layout):
-                return True, row
-        return False, None
-    
     def layout_was_run(self, layout_name, mem_layout):
         prev_layout_res = None
         if not self.results_df.empty:
@@ -491,11 +472,6 @@ class MosrangeExperiment:
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
             return prev_res
-        found, prev_res = self.find_layout_results(mem_layout)
-        if found:
-            self.num_generated_layouts -= 1
-            self.last_layout_num -= 1
-            return prev_res
 
         self.write_layout(layout_name, mem_layout)
         out_dir = f'{self.exp_root_dir}/{layout_name}'
@@ -518,9 +494,6 @@ class MosrangeExperiment:
         tlb_hits = layout_res['stlb_hits']
         walk_cycles = layout_res['walk_cycles']
         runtime = layout_res['cpu_cycles']
-        
-        if 'hugepages' not in layout_res:
-            layout_res['hugepages'] = mem_layout
 
         logging.info('-------------------------------------------')
         logging.info(f'Results:')
@@ -627,19 +600,11 @@ class MosrangeExperiment:
         return layout
 
     def run_next_layout(self, mem_layout):
-        self.num_generated_layouts += 1
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
         logging.info(f'run workload under {layout_name} with {len(mem_layout)} hugepages')
         last_result = self.run_workload(mem_layout, layout_name)
         return last_result
-    
-    def run_layouts(self, layouts):
-        results_df = pd.DataFrame()
-        for l in layouts:
-            r = self.run_next_layout(l)
-            results_df = results_df.append(r)
-        return results_df
 
     def findTlbCoverageLayout(self, df, tlb_coverage_percentage, base_pages, exclude_pages=None):
         epsilon = 0.5
@@ -772,7 +737,7 @@ class MosrangeExperiment:
                         excluded_headpages.append(exclude_pages)
                         included_headpages.append(include_pages)
         for i in range(len(included_headpages)):
-            if self.num_generated_layouts >= self.num_layouts:
+            if self.last_layout_num >= self.num_layouts:
                 break
             print(i)
             exclude_pages = excluded_headpages[i]
@@ -784,25 +749,25 @@ class MosrangeExperiment:
                 if layout:
                     mem_layouts.append(layout)
             for layout in mem_layouts:
-                if self.num_generated_layouts >= self.num_layouts:
+                if self.last_layout_num >= self.num_layouts:
                     break
                 last_result = self.run_next_layout(layout)
                 deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                 if deviation > deviation_threshold:
                     continue
 
-        while self.num_generated_layouts < self.num_layouts:
+        while self.last_layout_num < self.num_layouts:
             logging.info(f'findLayouts: pebs_coverage={self.metric_coverage}')
             ascending_layouts = []
             descending_layouts = []
-            rem_layouts = self.num_layouts - self.num_generated_layouts
+            rem_layouts = self.num_layouts - self.last_layout_num
             self.findLayouts(self.metric_coverage, [], [], (rem_layouts // 2) + 1, ascending_layouts, True)
             self.findLayouts(self.metric_coverage, [], [], rem_layouts // 2, descending_layouts, False)
             general_mem_layouts = ascending_layouts + descending_layouts
             logging.info(f'findLayouts returned #{len(general_mem_layouts)}')
 
             for general_layout in general_mem_layouts:
-                if self.num_generated_layouts >= self.num_layouts:
+                if self.last_layout_num >= self.num_layouts:
                     break
 
                 if general_layout and self.isPagesListUnique(general_layout, self.layouts):
@@ -832,15 +797,14 @@ class MosrangeExperiment:
                 # logging.info(f'findLayouts returned #{len(mem_layouts)}')
 
                 # for layout in mem_layouts:
-                #     if self.num_generated_layouts >= self.num_layouts:
+                #     if self.last_layout_num >= self.num_layouts:
                 #         break
                 #     last_result = self.run_next_layout(layout)
                 #     deviation = abs(last_result[self.metric_name] - self.metric_val) / self.metric_val
                     # if deviation > deviation_threshold:
                     #     break
 
-    def run_mosrange(self):
-        self.num_generated_layouts = 0
+    def run(self):
         # Define the initial data samples
         res_df = self.generate_initial_samples()
 
@@ -857,155 +821,6 @@ class MosrangeExperiment:
         logging.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
         logging.info('================================================')
 
-    def fixedselect(self, pebs_df):
-        layouts = []
-        self._findLayouts(pebs_df, self.metric_coverage, [], [], 10, layouts)
-        pebs_df = self.pebs_df.sort_values('NUM_ACCESSES', ascending=False)
-        self._findLayouts(pebs_df, self.metric_coverage, [], [], 10, layouts)
-        return layouts
-    
-    def run_fixedselect(self):
-        self.num_generated_layouts = 0
-        layouts = []
-        pebs_df = self.pebs_df.query(f'PAGE_NUMBER % 2 == 0')
-        layouts.append(self.fixedselect(pebs_df))
-        pebs_df = self.pebs_df.query(f'PAGE_NUMBER % 2 == 1')
-        layouts.append(self.fixedselect(pebs_df))
-        pebs_df = self.pebs_df.copy()
-        layouts.append(self.fixedselect(pebs_df))
-        for mem_layout in layouts:
-            if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-                self.run_next_layout(mem_layout)
-    
-    def combineGenes(self, parent1_allele, parent2_allele, merge_option=1):
-        gene = []
-        parent1_set = set(parent1_allele)
-        parent2_set = set(parent2_allele)
-        only_in_parent1 = list(parent1_set - parent2_set)
-        only_in_parent2 = list(parent2_set - parent1_set)
-        in_both = list(parent1_set & parent2_set)
-
-        only_in_parent1.sort()
-        only_in_parent2.sort()
-        
-        gene += in_both
-        if merge_option == 1:
-            gene += only_in_parent1[0:math.ceil(len(only_in_parent1)/2)] 
-            gene += only_in_parent2[0:math.ceil(len(only_in_parent2)/2)]
-        elif merge_option == 2:
-            gene += only_in_parent1[0::2]
-            gene += only_in_parent2[1::2]
-
-        random.seed(len(gene))
-        gene_deviation = random.randint(0, 511)
-
-        return gene, gene_deviation
-
-    def geneticselect(self, parent1, parent2, merge_option, max_layouts=10):
-        layouts = []
-        # TODO: add offset to run_next_layout
-        layout, offset = self.combineGenes(parent1, parent2, merge_option)
-        while layout and self.isPagesListUnique(layout, self.layouts):
-            layouts.append(layout)
-            results = self.run_next_layout(layout)
-            res_df = self.get_runs_measurements()
-            p1, p2 = self.get_surrounding_layouts(res_df)
-            layout, offset = self.combineGenes(p1, p2, merge_option)
-            if len(layouts) >= max_layouts:
-                break
-            
-    def run_geneticselect(self):
-        self.num_generated_layouts = 0
-        moselect_layouts = self.moselect_initial_samples(False, True)
-        res_df = self.run_layouts(moselect_layouts)
-        res_df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
-        L = 0
-        R = len(res_df) - 1
-        while L < R:
-            changed = False
-            layout_L = res_df.iloc[L]['hugepages']
-            layout_R = res_df.iloc[R]['hugepages']
-            self.geneticselect(layout_L, layout_R, merge_option=1, max_layouts=10)
-            self.geneticselect(layout_L, layout_R, merge_option=2, max_layouts=10)
-            if L < len(res_df) and res_df.iloc[L+1][self.metric_name] < self.metric_val:
-                L += 1
-                changed = True
-            if R > 0 and res_df.iloc[R-1][self.metric_name] > self.metric_val:
-                R -= 1
-                changed = True
-            if changed == False:
-                break
-    
-    def scaleExpectedCoverage(self, layout_res, base_layout):
-        pebs_coverage = self.pebsTlbCoverage(layout_res['hugepages'])
-        real_coverage = self.realMetricCoverage(layout_res)
-        base_pebs = self.pebsTlbCoverage(base_layout)
-        base_res = self.find_layout_results(base_layout)
-        base_real = self.realMetricCoverage(base_res)
-        pebs_delta = pebs_coverage - base_pebs
-        real_gap = real_coverage - base_real
-
-        if real_gap <= 0:
-            desired_coverage = min(100, base_pebs + pebs_delta * 2)
-            base_layout = layout_res['hugepages']
-            return desired_coverage, base_layout
-        return None, None
-    
-    def layoutComposedOfHeadPages(self, layout):
-        layout_coverage = self.pebsTlbCoverage(layout)
-        layout_pages = self.pebs_df.query(f'PAGE_NUMBER in {layout}')
-        layout_pages = layout_pages.sort_values('TLB_COVERAGE', ascending=False).head(10)
-        headpages_coverage = layout_pages['TLB_COVERAGE'].sum()
-        return headpages_coverage >= (layout_coverage/2)
-        
-    def realToPebsCoverage(self, layout_res, layout_expected_real):
-        layout = layout_res['hugepages']
-        layout_pebs = self.pebsTlbCoverage(layout)
-        layout_real = self.realMetricCoverage(layout_res)
-        
-        if self.layoutComposedOfHeadPages(layout):
-            scaled_desired_coverage = layout_expected_real - layout_real + layout_pebs
-            return scaled_desired_coverage
-
-        # prevent division by zero and getting numerous ratio in
-        # the calculation of expected_to_real
-        layout_real = max(1, layout_real)
-        expected_to_real = layout_expected_real / layout_real
-        scaled_desired_coverage = layout_pebs * expected_to_real
-        return scaled_desired_coverage
-    
-    def moselect(self, initial_layouts, max_budget=10):
-        generated_layouts = 0
-        res_df = self.run_layouts(initial_layouts)
-        lower_layout, upper_layout = self.get_surrounding_layouts(res_df)
-        base_layout = upper_layout
-        next_coverage = self.metric_coverage
-        while generated_layouts < max_budget:
-            A, B, C, U = self.split_pages_to_working_sets(upper_layout, lower_layout)
-            layout = self.generate_layout_from_base(base_layout, C, next_coverage)
-            if layout and self.isPagesListUnique(layout, self.layouts):
-                layout_res = self.run_next_layout(layout)
-            else:
-                break
-            next_coverage, base_layout = self.scaleExpectedCoverage(layout_res, base_layout)
-            if base_layout is None:
-                next_coverage = self.realToPebsCoverage(self, layout_res, self.metric_coverage)
-                base_layout = upper_layout
-            generated_layouts += 1
-            
-    def run_moselect(self):
-        self.num_generated_layouts = 0
-        self.moselect(self.moselect_initial_samples(False, True))
-        self.moselect(self.moselect_initial_samples(False, False))
-        self.moselect(self.moselect_initial_samples(True, False))
-        self.moselect(self.moselect_initial_samples(True, True))
-        
-    def run(self):
-        self.run_moselect()
-        self.run_fixedselect()
-        self.run_geneticselect()
-        self.run_mosrange()
-    
 import argparse
 def parseArguments():
     parser = argparse.ArgumentParser()
