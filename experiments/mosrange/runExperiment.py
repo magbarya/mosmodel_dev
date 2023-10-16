@@ -293,7 +293,7 @@ class MosrangeExperiment:
             else:
                 upper_layout = row
                 break
-        return lower_layout, upper_layout
+        return lower_layout['hugepages'], upper_layout['hugepages']
 
     def add_missing_pages_to_pebs(self):
         pebs_pages = self.pebs_df['PAGE_NUMBER'].tolist()
