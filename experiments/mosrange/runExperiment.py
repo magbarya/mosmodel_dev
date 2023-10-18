@@ -1004,11 +1004,43 @@ class MosrangeExperiment:
         self.moselect(self.moselect_initial_samples(True, True))
         
     def run(self):
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'----------------------------\n')
+            file.write(f'before: layout{self.last_layout_num}\n')
+            
         self.generate_initial_samples()
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'--> generate_initial_samples\n')
+            file.write(f'after: layout{self.last_layout_num}\n')
+            file.write(f'----------------------------\n')
+            file.write(f'before: layout{self.last_layout_num}\n')
+            
         self.run_moselect()
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'--> run_moselect\n')
+            file.write(f'after: layout{self.last_layout_num}\n')
+            file.write(f'----------------------------\n')
+            file.write(f'before: layout{self.last_layout_num}\n')
+            
         self.run_fixedselect()
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'--> run_fixedselect\n')
+            file.write(f'after: layout{self.last_layout_num}\n')
+            file.write(f'----------------------------\n')
+            file.write(f'before: layout{self.last_layout_num}\n')
+            
         self.run_geneticselect()
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'--> run_geneticselect\n')
+            file.write(f'after: layout{self.last_layout_num}\n')
+            file.write(f'----------------------------\n')
+            file.write(f'before: layout{self.last_layout_num}\n')
+            
         self.run_mosrange()
+        with open('layouts_selectors.txt', 'w') as file:
+            file.write(f'--> run_mosrange\n')
+            file.write(f'after: layout{self.last_layout_num}\n')
+            file.write(f'----------------------------\n')
     
 import argparse
 def parseArguments():
