@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import logging
+from Utils.utils import Utils
 
 import datetime
 class CollectResults:
@@ -78,16 +79,16 @@ class CollectResults:
             if f.is_dir() and f.name.startswith('layout') and not f.name == 'layouts' and not 'outlier' in f.name:
                 layout_list.append(f.name)
         return layout_list
-            
+        
     def __collectRawResults(self):
         layout_list = CollectResults.__getLayouts(self.experiments_root)
         if not layout_list:
             return None
         # build the output directory
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        if not output_dir.endswith('/'):
-            output_dir = output_dir + '/'
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+        if not self.output_dir.endswith('/'):
+            self.output_dir = self.output_dir + '/'
 
         # collect the results, one dataframe for each repetition
         dataframe_list = []
@@ -96,13 +97,13 @@ class CollectResults:
             df = experiment_list.collect(repeat)
             csv_file_name = 'repeat' + str(repeat) + '.csv'
             if len(layout_list) > 1:
-                CollectResults.__writeDataframeToCsv(df, output_dir + csv_file_name)
+                CollectResults.__writeDataframeToCsv(df, self.output_dir + csv_file_name)
             dataframe_list.append(df)
 
         df = pd.concat(dataframe_list)
         return df
     
-    def __handleOutliers(mean_df, std_df, remove_outliers, skip_outliers):
+    def __handleOutliers(self, mean_df, std_df, remove_outliers, skip_outliers):
         found = False
         # detect outliers
         index_column = mean_df.index
@@ -113,15 +114,15 @@ class CollectResults:
         outliers = variation > outlier_threshold
         if outliers.any().any():
             found = True
-            print("Error: the results in", args.experiments_root, "showed considerable variation")
-            print(outliers)
+            logging.warn("Error: the results in", self.experiments_root, "showed considerable variation")
+            logging.warn(outliers)
             if remove_outliers:
                 now = str(datetime.datetime.now())[:19]
                 now = now.replace(" ","_").replace(":","-")
                 for layout, outlier in outliers.iterrows():
                     if not outlier['seconds-elapsed'] and not outlier['ref-cycles'] and not outlier['cpu-cycles']:
                         continue
-                    l_old_path = args.experiments_root + '/' + layout
+                    l_old_path = self.experiments_root + '/' + layout
                     l_new_path = l_old_path + '.outlier.' + now
                     print('remove outlier: ',l_old_path,' --> ',l_new_path)
                     os.rename(l_old_path, l_new_path)
@@ -131,15 +132,17 @@ class CollectResults:
         return found
             
     def collectResults(self, write_results=True, remove_outliers=True, skip_outliers=False):
+        logging.debug(f'collecting results to the directory: {self.output_dir}')
         df = self.__collectRawResults()
-        if not df:
+        if df is None or df.empty:
             logging.debug('there is no results to collect, skipping...')
             return None, False
+        
         mean_df = df.groupby(df.index).mean()
         median_df = df.groupby(df.index).median()
         std_df = df.groupby(df.index).std()
         
-        found_outliers = CollectResults.__handleOutliers(median_df, std_df, remove_outliers, skip_outliers)
+        found_outliers = self.__handleOutliers(median_df, std_df, remove_outliers, skip_outliers)
 
         if write_results:
             # if there are no outliers, write the aggregated results
@@ -148,4 +151,7 @@ class CollectResults:
             CollectResults.__writeDataframeToCsv(df, self.output_dir + 'all_repeats.csv')
             CollectResults.__writeDataframeToCsv(std_df, self.output_dir + 'std.csv')
         
-        return median_df, found_outliers
+        logging.info(f'** results of {len(median_df)} layouts were collected and written **')
+        
+        res_df = Utils.load_dataframe(median_df.reset_index())
+        return res_df, found_outliers

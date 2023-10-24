@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # import cProfile
+import logging
 from mosrange_selector import MosrangeSelector
     
 import argparse
@@ -25,6 +26,11 @@ if __name__ == "__main__":
         raise ValueError('Should provide either metric_value or metric_coverage arguments: None was provided!')
     if args.metric_value is not None and args.metric_coverage is not None:
         raise ValueError('Should provide either metric_value or metric_coverage arguments: Both were provided!')
+    
+    logging_level = logging.INFO
+    if args.debug:
+        logging_level = logging.DEBUG
+    logging.basicConfig(level=logging_level, format='[%(name)s:%(levelname)s] %(message)s')
 
     exp = MosrangeSelector(args.memory_footprint, 
                              args.pebs_mem_bins,

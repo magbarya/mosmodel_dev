@@ -45,10 +45,16 @@ class Utils:
         return (number != 0) and ((number & (number - 1)) == 0)
     
     def load_dataframe(perf_file, sort=False, drop_duplicates=True, shuffle=False):
-        df = pd.read_csv(perf_file)
+        if type(perf_file) is str:
+            df = pd.read_csv(perf_file)
+        elif type(perf_file) is pd.DataFrame:
+            df = perf_file
+        else:
+            assert False
+            
         if 'walk_cycles' not in df.columns:
             ps = PerformanceStatistics(perf_file)
-            df = ps.getDataFrame()
+            df = ps.getDataFrame().reset_index()
             df['walk_cycles'] = ps.getWalkDuration()
             df['cpu_cycles'] = ps.getRuntime()
             df['stlb_misses'] = ps.getStlbMisses()
@@ -140,6 +146,29 @@ class Utils:
                     end_offset=((p+1) * hugepage_size) + hugepages_start_offset)
         configuration.exportToCSV(output, layout)
 
+    def format_large_number(num) -> str:
+        factor, suffix = Utils.get_large_number_format_suffix(num)
+        num_str = str(round(num/factor, 2))
+        if suffix.lower == 'billions':
+            suffix = 'B'
+        elif suffix.lower == 'millions':
+            suffix = 'M'
+        else:
+            suffix = suffix.capitalize()
+            
+        return f'{num_str} {suffix}'
+    
+    def get_large_number_format_suffix(num):
+        suffix = ''
+        factor = 1
+        if 0.1*1e9 >= num >= 0.1*1e6:
+            factor = 1e6
+            suffix = 'millions'
+        elif num > 0.1*1e9:
+            factor = 1e9
+            suffix = 'billions'
+        return factor, suffix
+    
     def get_format_suffix_for_large_number(dataframes, metric):
         max_val = 0
         min_val = None

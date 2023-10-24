@@ -4,8 +4,13 @@ import pandas as pd
 import numpy as np
 
 class PerformanceStatistics:
-    def __init__(self, csv_file, index_col=None):
-        self._df = pd.read_csv(csv_file, index_col=index_col)
+    def __init__(self, perf_file, index_col=None):
+        if type(perf_file) is str:
+            self._df = pd.read_csv(perf_file, index_col=index_col)
+        elif type(perf_file) is pd.DataFrame:
+            self._df = perf_file.copy()
+        else:
+            assert False
         self._df.fillna(0, inplace=True)
 
     def __getDataSet(self, index=None):
