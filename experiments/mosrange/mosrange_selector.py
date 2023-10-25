@@ -218,7 +218,7 @@ class MosrangeSelector(Selector):
         subset = self.try_select_layout_dynamic_epsilon(pebs_df, expected_coverage)
         if subset:
             mem_layout += subset
-            return mem_layout
+            return list(set(mem_layout))
         
         # second chance: 
         only_in_layout1_df = self.pebs_df.query(f'PAGE_NUMBER in {only_in_layout1}').sort_values('TLB_COVERAGE')
@@ -228,7 +228,7 @@ class MosrangeSelector(Selector):
         mem_layout += only_in_layout1[0::2]
         mem_layout += only_in_layout2[0::2]
 
-        return mem_layout
+        return list(set(mem_layout))
     
     def combine_layouts_semi_random(self, layout1, layout2):
         layout1_set = set(layout1)
@@ -258,7 +258,7 @@ class MosrangeSelector(Selector):
             subset = self.try_select_layout(random_pebs_df, expected_coverage, epsilon=1)
             if subset:
                 mem_layout += subset
-                return mem_layout
+                return list(set(mem_layout))
         
         return []
 
@@ -381,18 +381,23 @@ class MosrangeSelector(Selector):
         
         # Define the initial data samples
         init_layouts = self.select_initial_layouts()
-        self.log_headline(f'==> start running #{len(init_layouts)} initial layouts')
+        self.logger.info('=======================================================')
+        self.logger.info(f'==> start running #{len(init_layouts)} initial layouts')
         res_df = self.run_layouts(init_layouts)
-        self.log_headline(f'<== completed running #{len(init_layouts)} initial layouts')
+        self.logger.info(f'<== completed running #{len(init_layouts)} initial layouts')
+        self.logger.info('=======================================================')
         
         while self.num_generated_layouts < self.num_layouts:
             # MosrangeSelector.pause()
-            self.log_headline(f'==> start selecting next layout: #{self.last_layout_num+1}')
+            self.logger.info('=======================================================')
+            self.logger.info(f'==> start selecting next layout: #{self.last_layout_num+1}')
             layout = self.select_next_layout()
-            self.log_headline(f'==> finished selecting next layout: #{self.last_layout_num+1}')
-            self.log_headline(f'==> start running next layout: #{self.last_layout_num+1}')
+            self.logger.info(f'<== finished selecting next layout: #{self.last_layout_num+1}')
+            self.logger.info('=======================================================')
+            self.logger.info(f'==> start running next layout: #{self.last_layout_num+1}')
             self.last_layout_result = self.run_next_layout(layout)
-            self.log_headline(f'==> completed running next layout: #{self.last_layout_num}')
+            self.logger.info(f'<== completed running next layout: #{self.last_layout_num}')
+            self.logger.info('=======================================================')
 
         self.logger.info('=================================================================')
         self.logger.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
