@@ -338,6 +338,10 @@ class MosrangeSelector(Selector):
             mem_layout = self.combine_layouts(lower_layout, upper_layout)
             if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
                 return mem_layout
+            else:
+                mem_layout = self.combine_layouts_semi_random(lower_layout, upper_layout)
+                if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+                    return mem_layout
             surrounding_percentile += 0.01
         assert False
 
