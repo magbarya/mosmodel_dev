@@ -41,6 +41,9 @@ class MosrangeSelector(Selector):
         self.metric_val = metric_val
         self.metric_coverage = metric_coverage
         self.search_pebs_threshold = 0.5
+        self.last_lo_layout = None
+        self.last_hi_layout = None
+        self.last_layout_result = None
         self.logger = logging.getLogger(__name__)
         self.update_metric_values()
 
@@ -154,6 +157,9 @@ class MosrangeSelector(Selector):
         return layout
 
     def try_select_layout_dynamic_epsilon(self, pebs_df, pebs_coverage, include_pages=[], max_epsilon=2, exclude_pages=None, sort_ascending=False):
+        include_pages_weight = self.pebsTlbCoverage(include_pages)
+        if include_pages_weight > pebs_coverage:
+            return []
         epsilon = 0.5
         while epsilon < max_epsilon:
             layout = self.try_select_layout(pebs_df, pebs_coverage, include_pages, epsilon, exclude_pages, sort_ascending)
@@ -220,6 +226,38 @@ class MosrangeSelector(Selector):
         mem_layout += only_in_layout2[0::2]
 
         return mem_layout
+    
+    def combine_layouts_semi_random(self, layout1, layout2):
+        layout1_set = set(layout1)
+        layout2_set = set(layout2)
+        only_in_layout1 = list(layout1_set - layout2_set)
+        only_in_layout2 = list(layout2_set - layout1_set)
+        in_both = list(layout1_set & layout2_set)
+        
+        mem_layout = in_both
+        
+        # define the search space to add left pages from
+        search_space = only_in_layout1 + only_in_layout2
+        pebs_df = self.pebs_df.query(f'PAGE_NUMBER in {search_space}')
+        # Set the seed for reproducibility (optional)
+        random.seed(42)
+        # Determine the maximum number of rows to select
+        max_rows_to_select = len(pebs_df)  # Maximum number of rows available
+        # Select a random number of rows (between 1 and max_rows_to_select)
+        n = random.randint(1, max_rows_to_select)
+        
+        # try to select half their combined weight
+        weight = self.pebsTlbCoverage(search_space)
+        expected_coverage = weight / 2
+        for i in range(self.num_layouts):
+            # Select n random rows from the DataFrame
+            random_pebs_df = pebs_df.sample(n)
+            subset = self.try_select_layout(random_pebs_df, expected_coverage, epsilon=1)
+            if subset:
+                mem_layout += subset
+                return mem_layout
+        
+        return []
 
     def scaleExpectedCoverage(self, layout_res, base_layout):
         pebs_coverage = self.pebsTlbCoverage(layout_res['hugepages'])
@@ -277,15 +315,30 @@ class MosrangeSelector(Selector):
                 next_coverage = self.realToPebsCoverage(self, layout_res, self.metric_coverage)
                 base_layout = upper_layout
     
+    def is_result_within_target_range(self, layout_res):
+        if layout_res is None:
+            return False
+        diff = abs(layout_res[self.metric_name] - self.metric_val)
+        diff_ratio = diff / self.metric_val
+        return diff_ratio < 0.01
+    
     def select_next_layout(self):
+        # if last result is within expected range, then use the same base layouts
+        if self.is_result_within_target_range(self.last_layout_result):
+            # use last surrounding layouts
+            mem_layout = self.combine_layouts_semi_random(self.last_lo_layout, self.last_hi_layout)
+            if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+                return mem_layout
+        
         surrounding_percentile = 0.01
-        while surrounding_percentile < 1:
+        while surrounding_percentile < 0.1:
             lower_layout, upper_layout = self.get_surrounding_layouts(self.results_df, surrounding_percentile)
+            self.last_lo_layout = lower_layout
+            self.last_hi_layout = upper_layout
             mem_layout = self.combine_layouts(lower_layout, upper_layout)
             if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
                 return mem_layout
-            surrounding_percentile *= 2
-            surrounding_percentile = min(1, surrounding_percentile)
+            surrounding_percentile += 0.01
         assert False
 
     def pause():
@@ -330,7 +383,7 @@ class MosrangeSelector(Selector):
             layout = self.select_next_layout()
             self.log_headline(f'==> finished selecting next layout: #{self.last_layout_num}')
             self.log_headline(f'==> start running next layout: #{self.last_layout_num}')
-            self.run_next_layout(layout)
+            self.last_layout_result = self.run_next_layout(layout)
             self.log_headline(f'==> completed running next layout: #{self.last_layout_num}')
 
         self.logger.info('=================================================================')
