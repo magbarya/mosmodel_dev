@@ -75,7 +75,7 @@ class MosrangeSelector(Selector):
         self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
         return mem_layouts
 
-    def get_surrounding_layouts(self, res_df, surrounding_percentile=0.01):
+    def get_surrounding_layouts(self, res_df, surrounding_percentile=0.01, layout_pair_idx=0):
         df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
         delta = surrounding_percentile * self.metric_val
         
@@ -93,7 +93,10 @@ class MosrangeSelector(Selector):
         hi_layouts_df = hi_layouts_df.query(f'{self.metric_name} <= {hi_layouts_max}')
         all_pairs_df = lo_layouts_df.merge(hi_layouts_df, how='cross', suffixes=['_lo', '_hi'])
         all_pairs_df['runtime_diff'] = abs(all_pairs_df['cpu_cycles_lo'] - all_pairs_df['cpu_cycles_hi'])
-        max_pair = all_pairs_df[all_pairs_df['runtime_diff'] == all_pairs_df['runtime_diff'].max()].iloc[0]
+        all_pairs_df = all_pairs_df.sort_values('runtime_diff', ascending=False).reset_index(drop=True)
+        if layout_pair_idx > len(all_pairs_df):
+            layout_pair_idx = 0
+        max_pair = all_pairs_df.iloc[layout_pair_idx]
         
         lo_layout = max_pair['hugepages_lo']
         hi_layout = max_pair['hugepages_hi']
@@ -243,13 +246,13 @@ class MosrangeSelector(Selector):
         random.seed(42)
         # Determine the maximum number of rows to select
         max_rows_to_select = len(pebs_df)  # Maximum number of rows available
-        # Select a random number of rows (between 1 and max_rows_to_select)
-        n = random.randint(1, max_rows_to_select)
         
         # try to select half their combined weight
         weight = self.pebsTlbCoverage(search_space)
         expected_coverage = weight / 2
         for i in range(self.num_layouts):
+            # Select a random number of rows (between 1 and max_rows_to_select)
+            n = random.randint(1, max_rows_to_select)
             # Select n random rows from the DataFrame
             random_pebs_df = pebs_df.sample(n)
             subset = self.try_select_layout(random_pebs_df, expected_coverage, epsilon=1)
@@ -331,17 +334,18 @@ class MosrangeSelector(Selector):
                 return mem_layout
         
         surrounding_percentile = 0.01
-        while surrounding_percentile < 0.1:
-            lower_layout, upper_layout = self.get_surrounding_layouts(self.results_df, surrounding_percentile)
-            self.last_lo_layout = lower_layout
-            self.last_hi_layout = upper_layout
-            mem_layout = self.combine_layouts(lower_layout, upper_layout)
-            if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-                return mem_layout
-            else:
-                mem_layout = self.combine_layouts_semi_random(lower_layout, upper_layout)
+        while surrounding_percentile < 0.5:
+            for idx in range(10):
+                lower_layout, upper_layout = self.get_surrounding_layouts(self.results_df, surrounding_percentile, idx)
+                self.last_lo_layout = lower_layout
+                self.last_hi_layout = upper_layout
+                mem_layout = self.combine_layouts(lower_layout, upper_layout)
                 if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
                     return mem_layout
+                else:
+                    mem_layout = self.combine_layouts_semi_random(lower_layout, upper_layout)
+                    if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+                        return mem_layout
             surrounding_percentile += 0.01
         assert False
 
@@ -383,10 +387,10 @@ class MosrangeSelector(Selector):
         
         while self.num_generated_layouts < self.num_layouts:
             # MosrangeSelector.pause()
-            self.log_headline(f'==> start selecting next layout: #{self.last_layout_num}')
+            self.log_headline(f'==> start selecting next layout: #{self.last_layout_num+1}')
             layout = self.select_next_layout()
-            self.log_headline(f'==> finished selecting next layout: #{self.last_layout_num}')
-            self.log_headline(f'==> start running next layout: #{self.last_layout_num}')
+            self.log_headline(f'==> finished selecting next layout: #{self.last_layout_num+1}')
+            self.log_headline(f'==> start running next layout: #{self.last_layout_num+1}')
             self.last_layout_result = self.run_next_layout(layout)
             self.log_headline(f'==> completed running next layout: #{self.last_layout_num}')
 
