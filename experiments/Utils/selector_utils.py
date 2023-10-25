@@ -350,6 +350,21 @@ class Selector:
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
 
+    def log_layout_result(self, layout_res):
+        tlb_misses = layout_res['stlb_misses']
+        tlb_hits = layout_res['stlb_hits']
+        walk_cycles = layout_res['walk_cycles']
+        runtime = layout_res['cpu_cycles']
+        
+        self.logger.info('-------------------------------------------')
+        self.logger.info(f'Results:')
+        self.logger.info(f'\tstlb-misses={tlb_misses/1e9:.2f} Billions')
+        self.logger.info(f'\tstlb-hits={tlb_hits/1e9:.2f} Billions')
+        self.logger.info(f'\twalk-cycles={walk_cycles/1e9:.2f} Billion cycles')
+        self.logger.info(f'\truntime={runtime/1e9:.2f} Billion cycles')
+        # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
+        self.logger.info('===========================================')
+        
     def run_workload(self, mem_layout, layout_name):
         # TODO: use below flow to check wether the layout content exists under different layout_name
         prev_res = self.get_layout_results(layout_name)
@@ -357,6 +372,7 @@ class Selector:
             self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
+            self.log_layout_result(layout_res)
             return prev_res
         
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
@@ -399,22 +415,9 @@ class Selector:
                 break
 
         layout_res = self.get_layout_results(layout_name)
-        tlb_misses = layout_res['stlb_misses']
-        tlb_hits = layout_res['stlb_hits']
-        walk_cycles = layout_res['walk_cycles']
-        runtime = layout_res['cpu_cycles']
-        
         if 'hugepages' not in layout_res:
             layout_res['hugepages'] = mem_layout
-
-        self.logger.info('-------------------------------------------')
-        self.logger.info(f'Results:')
-        self.logger.info(f'\tstlb-misses={tlb_misses/1e9:.2f} Billions')
-        self.logger.info(f'\tstlb-hits={tlb_hits/1e9:.2f} Billions')
-        self.logger.info(f'\twalk-cycles={walk_cycles/1e9:.2f} Billion cycles')
-        self.logger.info(f'\truntime={runtime/1e9:.2f} Billion cycles')
-        # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
-        self.logger.info('===========================================')
+        self.log_layout_result(layout_res)
         return layout_res
 
     def run_next_layout(self, mem_layout):
