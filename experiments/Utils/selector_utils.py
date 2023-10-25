@@ -263,8 +263,10 @@ class Selector:
         return only_in_upper, only_in_lower, out_union, all
 
     def get_layout_results(self, layout_name):
-        layout_results = self.results_df[self.results_df['layout'] == layout_name].iloc[0]
-        return layout_results
+        layout_results = self.results_df[self.results_df['layout'] == layout_name]
+        if layout_results.empty:
+            return None
+        return layout_results.iloc[0]
 
     def get_surrounding_layouts(self, res_df, metric_name, metric_val):
         # sort pebs by stlb-misses
@@ -343,7 +345,7 @@ class Selector:
         prev_layout_hugepages = prev_layout_res['hugepages']
         if set(prev_layout_hugepages) != set(mem_layout):
             # the existing layout has different hugepages set than the new one
-            return False, None
+            return True, None
 
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
@@ -351,18 +353,23 @@ class Selector:
     def run_workload(self, mem_layout, layout_name):
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
         # if the layout's measurements were found
-        if found:
+        if found and prev_res is not None:
             self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
             return prev_res
-        found, prev_res = self.find_layout_results(mem_layout)
-        # if layout file was found but it was not run
-        if found:
-            self.num_generated_layouts -= 1
-            self.last_layout_num -= 1
-            return prev_res
+        elif found and prev_res is None:
+            self.logger.warning(f'--- {layout_name} already exists but its content is changed. Overwriting and rerunning ---')
+            # TODO: check if this happens and if so why? 
+            assert False
+        else: # layout_name was not found
+            found, prev_res = self.find_layout_results(mem_layout)
+            # if the layout was found but under different layout_name
+            if found:
+                self.last_layout_num -= 1
+                return prev_res
 
+        self.num_generated_layouts += 1
         self.write_layout(layout_name, mem_layout)
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_cmd = f'{self.run_experiment_cmd} {layout_name}'
@@ -404,7 +411,6 @@ class Selector:
         return layout_res
 
     def run_next_layout(self, mem_layout):
-        self.num_generated_layouts += 1
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
         self.logger.info(f'run workload under {layout_name} with {len(mem_layout)} hugepages')
