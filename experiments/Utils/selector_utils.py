@@ -351,6 +351,14 @@ class Selector:
         return True, prev_layout_res
 
     def run_workload(self, mem_layout, layout_name):
+        # TODO: use below flow to check wether the layout content exists under different layout_name
+        prev_res = self.get_layout_results(layout_name)
+        if prev_res is not None:
+            self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
+            self.layouts.append(mem_layout)
+            self.layout_names.append(layout_name)
+            return prev_res
+        
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
         # if the layout's measurements were found
         if found and prev_res is not None:
@@ -360,13 +368,12 @@ class Selector:
             return prev_res
         elif found and prev_res is None:
             self.logger.warning(f'--- {layout_name} already exists but its content is changed. Overwriting and rerunning ---')
-            # TODO: check if this happens and if so why? 
-            assert False
         else: # layout_name was not found
             found, prev_res = self.find_layout_results(mem_layout)
             # if the layout was found but under different layout_name
             if found:
                 self.last_layout_num -= 1
+                assert False
                 return prev_res
 
         self.num_generated_layouts += 1
