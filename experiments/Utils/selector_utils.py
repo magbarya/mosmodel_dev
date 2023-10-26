@@ -7,6 +7,7 @@ import os
 import logging
 from Utils.collect_results import CollectResults
 from Utils.layout_utils import LayoutUtils
+from Utils.utils import Utils
 
 class Selector:
     DEFAULT_HUGEPAGE_SIZE = 1 << 21 # 2MB 0
@@ -352,6 +353,9 @@ class Selector:
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
 
+    def custom_log_layout_result(self, layout_res):
+        pass
+    
     def log_layout_result(self, layout_res):
         tlb_misses = layout_res['stlb_misses']
         tlb_hits = layout_res['stlb_hits']
@@ -360,10 +364,11 @@ class Selector:
         
         self.logger.info('-------------------------------------------')
         self.logger.info(f'Results:')
-        self.logger.info(f'\tstlb-misses={tlb_misses/1e9:.2f} Billions')
-        self.logger.info(f'\tstlb-hits={tlb_hits/1e9:.2f} Billions')
-        self.logger.info(f'\twalk-cycles={walk_cycles/1e9:.2f} Billion cycles')
-        self.logger.info(f'\truntime={runtime/1e9:.2f} Billion cycles')
+        self.logger.info(f'\tstlb-misses={Utils.format_large_number(tlb_misses)}')
+        self.logger.info(f'\tstlb-hits={Utils.format_large_number(tlb_hits)}')
+        self.logger.info(f'\twalk-cycles={Utils.format_large_number(walk_cycles)}')
+        self.logger.info(f'\truntime={Utils.format_large_number(runtime)}')
+        self.custom_log_layout_result()
         # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
         self.logger.info('===========================================')
         
