@@ -263,6 +263,8 @@ class Selector:
         return only_in_upper, only_in_lower, out_union, all
 
     def get_layout_results(self, layout_name):
+        if self.results_df is None:
+            return None
         layout_results = self.results_df[self.results_df['layout'] == layout_name]
         if layout_results.empty:
             return None

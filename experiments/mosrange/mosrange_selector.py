@@ -44,6 +44,7 @@ class MosrangeSelector(Selector):
         self.last_lo_layout = None
         self.last_hi_layout = None
         self.last_layout_result = None
+        self.head_pages_coverage_threshold = 2
         self.logger = logging.getLogger(__name__)
         self.update_metric_values()
 
@@ -53,26 +54,129 @@ class MosrangeSelector(Selector):
         else:
             self.metric_coverage = ((self.metric_max_val - self.metric_val) / self.metric_range_delta) * 100
 
-    def select_initial_layouts(self):
+    def select_initial_layouts_random(self, tmp_layouts=[], max_num_layouts=10):
         self.logger.info(f'--> select_initial_layouts() entry')
         
-        head_rows = self.orig_pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
+        mem_layouts = []
+        pebs_total_pages = len(self.pebs_df)
+        for i in range(pebs_total_pages//2, pebs_total_pages+1):
+            pebs_df = self.pebs_df.sample(i)
+            layout = self.try_select_layout_dynamic_epsilon(pebs_df, self.metric_coverage)
+            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
+                mem_layouts.append(layout)
+                if len(mem_layouts) > max_num_layouts:
+                    break
+        
+        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts_multiples_pagenumbers(self, tmp_layouts=[], max_num_layouts=10):
+        self.logger.info(f'--> select_initial_layouts() entry')
+        
+        mem_layouts = []
+        for i in range(128, 1, -1):
+            pebs_df = self.pebs_df.query(f'PAGE_NUMBER % {i} == 0')
+            layout = self.try_select_layout_dynamic_epsilon(pebs_df, self.metric_coverage)
+            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
+                mem_layouts.append(layout)
+                if len(mem_layouts) > max_num_layouts:
+                    break
+        
+        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts_minimal_tail_pages(self, tmp_layouts=[], max_num_layouts=10):
+        self.logger.info(f'--> select_initial_layouts() entry')
+        
+        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
+        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
+        head_pages = head_rows['PAGE_NUMBER'].to_list()
+        # create eight layouts as all subgroups of these three group layouts
+        res = []
+        for subset_size in range(len(head_pages)+1):
+            for subset in itertools.combinations(head_pages, subset_size):
+                layout = list(subset)
+                layout_pebs = self.pebsTlbCoverage(layout)
+                res.append({'hugepages': layout, 'pebs_coverage': layout_pebs})
+        res_df = pd.DataFrame.from_records(res)
+        res_df['diff'] = res_df['pebs_coverage'] - self.metric_coverage
+        res_df = res_df.sort_values('diff', ascending=True)
+        res_df = res_df.head(max_num_layouts)
+        
+        mem_layouts = []
+        base_layouts = res_df['hugepages'].to_list()
+        for include_pages in base_layouts:
+            exclude_pages = list(set(head_pages) - set(include_pages))
+            layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage, 
+                                                            include_pages, max_epsilon=5, exclude_pages=exclude_pages)
+            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
+                mem_layouts.append(layout)
+        
+        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+
+    def select_initial_layouts_headpages_subgroups(self, tmp_layouts=[], max_num_layouts=10):
+        self.logger.info(f'--> select_initial_layouts() entry')
+        
+        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
+        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
         head_pages = head_rows['PAGE_NUMBER'].to_list()
         mem_layouts = []
         # create eight layouts as all subgroups of these three group layouts
-        for subset_size in range(len(head_pages)+1):
+        for subset_size in range(len(head_pages), 0, -1):
             for subset in itertools.combinations(head_pages, subset_size):
                 include_pages = list(subset)
                 exclude_pages = list(set(head_pages) - set(include_pages))
                 self.logger.debug(f'** try to find initial layout that contains pages: {include_pages} **')
                 layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage, 
                                                                 include_pages, max_epsilon=5, exclude_pages=exclude_pages)
-                if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
+                if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
+                    mem_layouts.append(layout)
+                    if len(mem_layouts) > max_num_layouts:
+                        break
+                    # # for each subset size will select only one layout (which is enough)
+                    # break
+        
+        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts_headpages_candidates(self, tmp_layouts=[], max_num_layouts=10, subset_size_ascending=True):
+        self.logger.info(f'--> select_initial_layouts() entry')
+        
+        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
+        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
+        head_pages = head_rows['PAGE_NUMBER'].to_list()
+        mem_layouts = []
+        # create eight layouts as all subgroups of these three group layouts
+        if subset_size_ascending:
+            subsets_size_range = range(len(head_pages)+1)
+        else:
+            subsets_size_range = range(len(head_pages), 0, -1)
+        for subset_size in subsets_size_range:
+            for subset in itertools.combinations(head_pages, subset_size):
+                include_pages = list(subset)
+                exclude_pages = list(set(head_pages) - set(include_pages))
+                self.logger.debug(f'** try to find initial layout that contains pages: {include_pages} **')
+                layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage, 
+                                                                include_pages, max_epsilon=5, exclude_pages=exclude_pages)
+                if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
                     mem_layouts.append(layout)
                     # for each subset size will select only one layout (which is enough)
                     break
         
         self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts(self):
+        mem_layouts = []
+        
+        mem_layouts += self.select_initial_layouts_headpages_candidates(mem_layouts, subset_size_ascending=True)
+        # mem_layouts += self.select_initial_layouts_headpages_candidates(mem_layouts, subset_size_ascending=False)
+        # mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_minimal_tail_pages(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_multiples_pagenumbers(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_random(mem_layouts)
+        
         return mem_layouts
 
     def get_surrounding_layouts(self, res_df, surrounding_percentile=0.01, layout_pair_idx=0):
@@ -375,29 +479,45 @@ class MosrangeSelector(Selector):
         self.logger.info(msg)
         self.logger.info('=======================================================')
         
-    def run(self):
-        self.num_generated_layouts = 0
-        self.log_metadata()
-        
+    def generate_initial_layouts(self):
+        # self.num_generated_layouts = 0
         # Define the initial data samples
         init_layouts = self.select_initial_layouts()
+        
         self.logger.info('=======================================================')
         self.logger.info(f'==> start running #{len(init_layouts)} initial layouts')
+        
         res_df = self.run_layouts(init_layouts)
+        
         self.logger.info(f'<== completed running #{len(init_layouts)} initial layouts')
         self.logger.info('=======================================================')
         
+        return res_df
+    
+    def generate_next_layout(self):
+        # MosrangeSelector.pause()
+        self.logger.info('=======================================================')
+        self.logger.info(f'==> start selecting next layout: #{self.last_layout_num+1}')
+        
+        layout = self.select_next_layout()
+        
+        self.logger.info(f'<== finished selecting next layout: #{self.last_layout_num+1}')
+        self.logger.info('=======================================================')
+        self.logger.info(f'==> start running next layout: #{self.last_layout_num+1}')
+        
+        self.last_layout_result = self.run_next_layout(layout)
+        
+        self.logger.info(f'<== completed running next layout: #{self.last_layout_num}')
+        self.logger.info('=======================================================')
+    
+    def run(self):
+        self.log_metadata()
+        
+        self.generate_initial_layouts()
+        
+        self.num_generated_layouts = 0
         while self.num_generated_layouts < self.num_layouts:
-            # MosrangeSelector.pause()
-            self.logger.info('=======================================================')
-            self.logger.info(f'==> start selecting next layout: #{self.last_layout_num+1}')
-            layout = self.select_next_layout()
-            self.logger.info(f'<== finished selecting next layout: #{self.last_layout_num+1}')
-            self.logger.info('=======================================================')
-            self.logger.info(f'==> start running next layout: #{self.last_layout_num+1}')
-            self.last_layout_result = self.run_next_layout(layout)
-            self.logger.info(f'<== completed running next layout: #{self.last_layout_num}')
-            self.logger.info('=======================================================')
+            self.generate_next_layout()
 
         self.logger.info('=================================================================')
         self.logger.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
