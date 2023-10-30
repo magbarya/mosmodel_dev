@@ -124,7 +124,7 @@ class Selector:
             results_df.at[index, 'hugepages'] = mem_layout_pages
         if filter_results:
             results_df = results_df.query(f'layout in {self.layout_names}').reset_index(drop=True)
-            self.logger.info(f'collect results and keep the following {len(self.layout_names)} layouts: {self.layout_names}')
+            self.logger.info(f'collect results and keep the following {len(self.layout_names)} layouts: {self.layout_names[0]}--{self.layout_names[-1]}')
             self.logger.info(f'** kept results of {len(results_df)} collected layouts **')
 
         # print results of previous runs
@@ -318,10 +318,16 @@ class Selector:
         self.layouts.append(mem_layout)
         self.layout_names.append(layout_name)
 
-    def isPagesListUnique(self, pages_list, all_layouts):
+    def isPagesListUnique(self, pages_list, all_layouts, debug=False):
         pages_set = set(pages_list)
+        i=0
         for l in all_layouts:
+            i += 1
             if set(l) == pages_set:
+                if debug:
+                    logging.info('-----------------------------')
+                    logging.info(f'the compared pages list is equal to layout {i}')
+                    logging.info('-----------------------------')
                 return False
         return True
 
@@ -353,10 +359,10 @@ class Selector:
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
 
-    def custom_log_layout_result(self, layout_res):
+    def custom_log_layout_result(self, layout_res, old_result=False):
         pass
     
-    def log_layout_result(self, layout_res):
+    def log_layout_result(self, layout_res, old_result=False):
         tlb_misses = layout_res['stlb_misses']
         tlb_hits = layout_res['stlb_hits']
         walk_cycles = layout_res['walk_cycles']
@@ -368,7 +374,7 @@ class Selector:
         self.logger.info(f'\tstlb-hits={Utils.format_large_number(tlb_hits)}')
         self.logger.info(f'\twalk-cycles={Utils.format_large_number(walk_cycles)}')
         self.logger.info(f'\truntime={Utils.format_large_number(runtime)}')
-        self.custom_log_layout_result()
+        self.custom_log_layout_result(layout_res, old_result)
         # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
         self.logger.info('===========================================')
         
@@ -379,7 +385,7 @@ class Selector:
             self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
-            self.log_layout_result(prev_res)
+            self.log_layout_result(prev_res, True)
             return prev_res
         
         found, prev_res = self.layout_was_run(layout_name, mem_layout)

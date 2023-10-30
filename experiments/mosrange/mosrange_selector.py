@@ -26,6 +26,15 @@ class MosrangeSelector(Selector):
                  metric_name,
                  metric_val, 
                  metric_coverage) -> None:
+        self.num_generated_layouts = 0
+        self.metric_val = metric_val
+        self.metric_coverage = metric_coverage
+        self.search_pebs_threshold = 0.5
+        self.last_lo_layout = None
+        self.last_hi_layout = None
+        self.last_layout_result = None
+        self.last_runtime_range = 0
+        self.head_pages_coverage_threshold = 2
         super().__init__(memory_footprint_file, 
                          pebs_mem_bins_file,
                          exp_root_dir, 
@@ -37,15 +46,6 @@ class MosrangeSelector(Selector):
                          rebuild_pebs=True,
                          skip_outliers=False,
                          generate_endpoints=True)
-        self.num_generated_layouts = 0
-        self.metric_val = metric_val
-        self.metric_coverage = metric_coverage
-        self.search_pebs_threshold = 0.5
-        self.last_lo_layout = None
-        self.last_hi_layout = None
-        self.last_layout_result = None
-        self.last_runtime_range = 0
-        self.head_pages_coverage_threshold = 2
         # Set the seed for reproducibility (optional)
         random.seed(42)
         self.logger = logging.getLogger(__name__)
@@ -56,7 +56,7 @@ class MosrangeSelector(Selector):
             self.metric_val = self.metric_max_val - self.metric_range_delta * (self.metric_coverage / 100)
         else:
             self.metric_coverage = ((self.metric_max_val - self.metric_val) / self.metric_range_delta) * 100
-
+ 
     def get_surrounding_layouts(self, res_df, surrounding_percentile=0.01, layout_pair_idx=0):
         df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
         delta = surrounding_percentile * self.metric_val
@@ -73,15 +73,17 @@ class MosrangeSelector(Selector):
         
         lo_layouts_df = lo_layouts_df.query(f'{self.metric_name} >= {lo_layouts_min}')
         hi_layouts_df = hi_layouts_df.query(f'{self.metric_name} <= {hi_layouts_max}')
+        assert len(lo_layouts_df) > 0
+        assert len(hi_layouts_df) > 0
         all_pairs_df = lo_layouts_df.merge(hi_layouts_df, how='cross', suffixes=['_lo', '_hi'])
         all_pairs_df['runtime_diff'] = abs(all_pairs_df['cpu_cycles_lo'] - all_pairs_df['cpu_cycles_hi'])
         all_pairs_df = all_pairs_df.sort_values('runtime_diff', ascending=False).reset_index(drop=True)
-        if layout_pair_idx > len(all_pairs_df):
+        if layout_pair_idx >= len(all_pairs_df):
             layout_pair_idx = 0
-        max_pair = all_pairs_df.iloc[layout_pair_idx]
+        selected_pair = all_pairs_df.iloc[layout_pair_idx]
         
-        lo_layout = max_pair['hugepages_lo']
-        hi_layout = max_pair['hugepages_hi']
+        lo_layout = selected_pair['hugepages_lo']
+        hi_layout = selected_pair['hugepages_hi']
         
         return lo_layout, hi_layout
 
@@ -148,7 +150,7 @@ class MosrangeSelector(Selector):
                                  sort_ascending=False, tmp_layouts=[],
                                  randomization='order'):
         layout = []
-        for i in range(self.num_layouts//2):
+        for i in range(self.num_layouts):
             if randomization == 'order':
                 layout = self.__try_select_layout_random_order(pebs_df=pebs_df,
                                                                pebs_coverage=pebs_coverage, 
@@ -232,8 +234,13 @@ class MosrangeSelector(Selector):
         if subset:
             mem_layout += subset
             return list(set(mem_layout))
+
+        # second chance: try to combine layouts randomally        
+        rand_layout = self.combine_layouts_semi_random(layout1, layout2)
+        if rand_layout and self.isPagesListUnique(rand_layout, self.layouts):
+            return rand_layout
         
-        # second chance: 
+        # third chance: try to combine layouts blindly
         only_in_layout1_df = self.pebs_df.query(f'PAGE_NUMBER in {only_in_layout1}').sort_values('TLB_COVERAGE')
         only_in_layout1 = only_in_layout1_df['PAGE_NUMBER'].to_list()
         only_in_layout2_df = self.pebs_df.query(f'PAGE_NUMBER in {only_in_layout2}').sort_values('TLB_COVERAGE')
@@ -278,6 +285,9 @@ class MosrangeSelector(Selector):
         metric_low_val = self.metric_val * (1 - epsilon)
         metric_hi_val = self.metric_val * (1 + epsilon)
         range_df = self.results_df.query(f'{metric_hi_val} >= {self.metric_name} >= {metric_low_val}')
+        
+        if len(range_df) < 2:
+            return 0
 
         max_runtime = range_df['cpu_cycles'].max()
         min_runtime = range_df['cpu_cycles'].min()
@@ -351,20 +361,20 @@ class MosrangeSelector(Selector):
         head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
         head_pages = head_rows['PAGE_NUMBER'].to_list()
         # create eight layouts as all subgroups of these three group layouts
-        res = []
+        all_subsets = []
         for subset_size in range(len(head_pages)+1):
             for subset in itertools.combinations(head_pages, subset_size):
                 layout = list(subset)
                 layout_pebs = self.pebsTlbCoverage(layout)
                 layout.sort()
-                res.append({'hugepages': layout, 'pebs_coverage': layout_pebs})
-        res_df = pd.DataFrame.from_records(res)
-        res_df['diff'] = self.metric_coverage - res_df['pebs_coverage']
-        res_df = res_df.query('diff >= 0').sort_values('diff', ascending=True)
-        res_df = res_df.head(max_num_layouts)
+                all_subsets.append({'hugepages': layout, 'pebs_coverage': layout_pebs})
+        all_subsets_df = pd.DataFrame.from_records(all_subsets)
+        all_subsets_df['diff'] = self.metric_coverage - all_subsets_df['pebs_coverage']
+        all_subsets_df = all_subsets_df.query('diff >= 0').sort_values('diff', ascending=True)
+        all_subsets_df = all_subsets_df.head(max_num_layouts)
         
         mem_layouts = []
-        base_layouts = res_df['hugepages'].to_list()
+        base_layouts = all_subsets_df['hugepages'].to_list()
         
         for include_pages in base_layouts:
             exclude_pages = list(set(head_pages) - set(include_pages))
@@ -437,6 +447,7 @@ class MosrangeSelector(Selector):
         mem_layouts = []
         debug_info = []
         mem_layouts_len = 0
+        prev_len = 0
         
         prev_len = len(mem_layouts)
         mem_layouts += self.select_initial_layouts_odd_even_pagenumbers(mem_layouts)
@@ -444,11 +455,11 @@ class MosrangeSelector(Selector):
         mem_layouts_len = len(mem_layouts) - prev_len
         debug_info.append({'method': 'odd_even_pagenumbers', 'num_layouts': mem_layouts_len})
         
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_pagenumbers_multiplies(mem_layouts)
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'pagenumbers_multiplies', 'num_layouts': mem_layouts_len})
+        # prev_len = len(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_pagenumbers_multiplies(mem_layouts)
+        # mem_layouts_len = len(mem_layouts) - mem_layouts_len
+        # mem_layouts_len = len(mem_layouts) - prev_len
+        # debug_info.append({'method': 'pagenumbers_multiplies', 'num_layouts': mem_layouts_len})
         
         prev_len = len(mem_layouts)
         mem_layouts += self.select_initial_layouts_random(mem_layouts)
@@ -462,16 +473,16 @@ class MosrangeSelector(Selector):
         mem_layouts_len = len(mem_layouts) - prev_len
         debug_info.append({'method': 'headpages_candidates', 'num_layouts': mem_layouts_len})
         
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=True)
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'headpages_subgroups_ascending', 'num_layouts': mem_layouts_len})
+        # prev_len = len(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=True)
+        # mem_layouts_len = len(mem_layouts) - prev_len
+        # debug_info.append({'method': 'headpages_subgroups_ascending', 'num_layouts': mem_layouts_len})
         
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=False)
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'headpages_subgroups_descending', 'num_layouts': mem_layouts_len})
+        # prev_len = len(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=False)
+        # mem_layouts_len = len(mem_layouts) - mem_layouts_len
+        # mem_layouts_len = len(mem_layouts) - prev_len
+        # debug_info.append({'method': 'headpages_subgroups_descending', 'num_layouts': mem_layouts_len})
         
         prev_len = len(mem_layouts)
         mem_layouts += self.select_initial_layouts_minimal_tail_pages(mem_layouts)
@@ -492,30 +503,41 @@ class MosrangeSelector(Selector):
         
         return mem_layouts
     
+    def combine_surrounding_layouts(self, results_df):
+        surrounding_percentile = 0.01
+        while surrounding_percentile < 1:
+            for idx in range(self.num_layouts):
+                lower_layout, upper_layout = self.get_surrounding_layouts(results_df, surrounding_percentile, idx)
+                # if the same surrounding layouts selected, then try to find another pair 
+                if self.last_lo_layout is not None \
+                    and self.last_hi_layout is not None \
+                    and set(self.last_lo_layout) == set(lower_layout) \
+                    and set(self.last_hi_layout) == set(upper_layout):
+                    continue
+                else:
+                    mem_layout = self.combine_layouts(lower_layout, upper_layout)
+                    if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+                        self.last_lo_layout = lower_layout
+                        self.last_hi_layout = upper_layout
+                        return mem_layout
+            surrounding_percentile += 0.01
+        return []
+            
     def select_next_layout(self):
         # if last result is within expected range, then use the same base layouts
         if self.is_result_within_target_range(self.last_layout_result):
             # use last surrounding layouts
-            mem_layout = self.combine_layouts_semi_random(self.last_lo_layout, self.last_hi_layout)
+            mem_layout = self.combine_layouts(self.last_lo_layout, self.last_hi_layout)
             if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
                 return mem_layout
         
-        surrounding_percentile = 0.01
-        while surrounding_percentile < 0.5:
-            for idx in range(10):
-                lower_layout, upper_layout = self.get_surrounding_layouts(self.results_df, surrounding_percentile, idx)
-                self.last_lo_layout = lower_layout
-                self.last_hi_layout = upper_layout
-                mem_layout = self.combine_layouts(lower_layout, upper_layout)
-                if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-                    return mem_layout
-                else:
-                    mem_layout = self.combine_layouts_semi_random(lower_layout, upper_layout)
-                    if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-                        return mem_layout
-            surrounding_percentile += 0.01
+        # otherwise, last result is not within expected range, then select new base layouts
+        mem_layout = self.combine_surrounding_layouts(self.results_df)
+        if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+            return mem_layout
+        
         assert False
-
+        
     def pause():
         print('=============================')
         print('press any key to continue ...')
@@ -537,7 +559,12 @@ class MosrangeSelector(Selector):
         self.logger.info(f'\t #repeats: {self.num_repeats}')
         self.logger.info('=================================================================')
     
-    def custom_log_layout_result(self, layout_res):
+    def custom_log_layout_result(self, layout_res, old_result=False):
+        if old_result:
+            return
+        # if endpoints were not run already, then skip
+        if not hasattr(self, 'all_2mb_r'):
+            return
         self.logger.info(f'\texpected-coverage={Utils.format_large_number(self.metric_coverage)}')
         self.logger.info(f'\treal-coverage={Utils.format_large_number(self.realMetricCoverage(layout_res))}')
         self.logger.info(f'\texpected-{self.metric_name}={Utils.format_large_number(self.metric_val)}')
@@ -545,6 +572,7 @@ class MosrangeSelector(Selector):
         self.logger.info(f'\tis_result_within_target_range={self.is_result_within_target_range(layout_res)}')
         prev_runtime_range = self.last_runtime_range
         curr_runtime_range = self.calculate_runtime_range()
+        self.last_runtime_range = curr_runtime_range
         runtime_range_improvement = curr_runtime_range - prev_runtime_range
         self.logger.info(f'\tprev_runtime_range={prev_runtime_range}%')
         self.logger.info(f'\tcurr_runtime_range={curr_runtime_range}%')

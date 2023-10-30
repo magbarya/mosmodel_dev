@@ -43,4 +43,10 @@ $(MEASUREMENTS): $(MEMORY_FOOTPRINT_FILE) $(PEBS_FILE) $(MOSRANGE_RUN_BENCHMARK)
 		--metric=$(MOSRANGE_METRIC_NAME) \
 		$(MOSRANGE_VALUE_ARG) $(MOSRANGE_COVERAGE_ARG)
 
+MEDIAN_RESULTS := $(addsuffix /median.csv,$(RESULT_DIR))
+$(MEDIAN_RESULTS): results/%/median.csv: experiments/%
+	mkdir -p $(dir $@)
+	$(COLLECT_RESULTS) --experiments_root=$< --repeats=$(NUM_OF_REPEATS) \
+		--output_dir=$(dir $@) --skip_outliers
+
 .PHONY: $(MODULE_NAME)
