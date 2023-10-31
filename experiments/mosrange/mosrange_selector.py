@@ -303,8 +303,41 @@ class MosrangeSelector(Selector):
         diff_ratio = diff / self.metric_val
         return diff_ratio < 0.01
     
+    def select_single_random_layout(self, all_pages, tmp_layouts=[]):
+        while True:
+            layout_size = random.randint(1, len(all_pages))
+            layout = random.sample(all_pages, layout_size)
+            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts)):
+                return layout
+        assert False
     
-    def select_initial_layouts_random(self, tmp_layouts=[], max_num_layouts=10):
+    def select_initial_layouts_blindly_random(self, tmp_layouts=[], max_num_layouts=10):
+        self.logger.info(f'--> select_initial_layouts_blindly_random() entry')
+        mem_layouts = []
+        for i in range(max_num_layouts):
+            layout = self.select_single_random_layout(self.all_pages, tmp_layouts+mem_layouts)
+            mem_layouts.append(layout)
+        self.logger.info(f'<-- select_initial_layouts_blindly_random() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts_pagenumbers_random(self, tmp_layouts=[], max_num_layouts=10):
+        self.logger.info(f'--> select_initial_layouts_pagenumbers_random() entry')
+        
+        mem_layouts = []
+        range_list = [2**i for i in range(1, max_num_layouts*2)]
+        for i in range_list:
+            pages_subset = [page_num for page_num in self.all_pages if page_num % i == 0]
+            if len(pages_subset) == 0:
+                continue
+            layout = self.select_single_random_layout(pages_subset, tmp_layouts+mem_layouts)
+            mem_layouts.append(layout)
+            if len(mem_layouts) >= max_num_layouts:
+                break
+        
+        self.logger.info(f'<-- select_initial_layouts_pagenumbers_random() exit: selected #{len(mem_layouts)} layouts')
+        return mem_layouts
+    
+    def select_initial_layouts_weighted_random(self, tmp_layouts=[], max_num_layouts=10):
         self.logger.info(f'--> select_initial_layouts() entry')
         
         mem_layouts = []
@@ -450,45 +483,22 @@ class MosrangeSelector(Selector):
         prev_len = 0
         
         prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_odd_even_pagenumbers(mem_layouts)
+        mem_layouts += self.select_initial_layouts_blindly_random(mem_layouts, 5)
         mem_layouts_len = len(mem_layouts) - mem_layouts_len
         mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'odd_even_pagenumbers', 'num_layouts': mem_layouts_len})
-        
-        # prev_len = len(mem_layouts)
-        # mem_layouts += self.select_initial_layouts_pagenumbers_multiplies(mem_layouts)
-        # mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        # mem_layouts_len = len(mem_layouts) - prev_len
-        # debug_info.append({'method': 'pagenumbers_multiplies', 'num_layouts': mem_layouts_len})
+        debug_info.append({'method': 'blindly_random', 'num_layouts': mem_layouts_len})
         
         prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_random(mem_layouts)
+        mem_layouts += self.select_initial_layouts_pagenumbers_random(mem_layouts, 5)
         mem_layouts_len = len(mem_layouts) - mem_layouts_len
         mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'random', 'num_layouts': mem_layouts_len})
+        debug_info.append({'method': 'pagenumbers_random', 'num_layouts': mem_layouts_len})
         
         prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_headpages_candidates(mem_layouts)
+        mem_layouts += self.select_initial_layouts_weighted_random(mem_layouts, 5)
         mem_layouts_len = len(mem_layouts) - mem_layouts_len
         mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'headpages_candidates', 'num_layouts': mem_layouts_len})
-        
-        # prev_len = len(mem_layouts)
-        # mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=True)
-        # mem_layouts_len = len(mem_layouts) - prev_len
-        # debug_info.append({'method': 'headpages_subgroups_ascending', 'num_layouts': mem_layouts_len})
-        
-        # prev_len = len(mem_layouts)
-        # mem_layouts += self.select_initial_layouts_headpages_subgroups(mem_layouts, subset_size_ascending=False)
-        # mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        # mem_layouts_len = len(mem_layouts) - prev_len
-        # debug_info.append({'method': 'headpages_subgroups_descending', 'num_layouts': mem_layouts_len})
-        
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_minimal_tail_pages(mem_layouts)
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'minimal_tail_pages', 'num_layouts': mem_layouts_len})
+        debug_info.append({'method': 'weighted_random', 'num_layouts': mem_layouts_len})
         
         print('=======================================================')
         from_layout = 4
@@ -499,7 +509,6 @@ class MosrangeSelector(Selector):
             print(f'{method} method has #{num_layouts} layouts: layout{from_layout}--layout{to_layout}')
             from_layout += num_layouts
         print('=======================================================')
-            
         
         return mem_layouts
     
