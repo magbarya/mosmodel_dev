@@ -67,7 +67,7 @@ class Selector:
         self.all_4kb_layout = []
         self.all_2mb_layout = [i for i in range(self.num_hugepages)]
         self.all_pebs_pages_layout = self.pebs_pages
-        
+
         if self.generate_endpoints:
             self.run_endpoint_layouts()
 
@@ -88,12 +88,12 @@ class Selector:
 
         output_log = f'{out_dir}/benchmark.log'
         error_log = f'{out_dir}/benchmark.log'
-        with open(output_log, 'w+') as out:
+        with open(output_log, 'a+') as out:
             out.write(output)
             out.write('============================================')
             out.write(f'the process exited with status: {return_code}')
             out.write('============================================')
-        with open(error_log, 'w+') as err:
+        with open(error_log, 'a+') as err:
             err.write(error)
             err.write('============================================')
             err.write(f'the process exited with status: {return_code}')
@@ -116,7 +116,7 @@ class Selector:
             self.logger.info(f'-- outliers were found and removed --')
         if results_df is None or results_df.empty:
             return results_df, found_outliers
-        
+
         results_df['hugepages'] = None
         for index, row in results_df.iterrows():
             layout_name = row['layout']
@@ -153,11 +153,11 @@ class Selector:
         total_access = pebs_df['NUM_ACCESSES'].sum()
         pebs_df['TLB_COVERAGE'] = pebs_df['NUM_ACCESSES'].mul(100).divide(total_access)
         pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=False)
-        
+
         pebs_df = pebs_df.reset_index()
-        
+
         return pebs_df
-    
+
     def predictTlbMisses(self, mem_layout):
         assert self.pebs_df is not None
         expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
@@ -185,7 +185,7 @@ class Selector:
         coverage = ((max_val - layout_metric_val) / delta) * 100
 
         return coverage
-    
+
     def run_endpoint_layouts(self):
         mem_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
         for i, mem_layout in enumerate(mem_layouts):
@@ -196,7 +196,7 @@ class Selector:
             self.run_next_layout(mem_layout)
         self.update_endpoint_results(self.results_df)
         return self.results_df
-    
+
     def update_endpoint_results(self, res_df):
         all_4kb_set = set(self.all_4kb_layout)
         all_2mb_set = set(self.all_2mb_layout)
@@ -217,7 +217,7 @@ class Selector:
 
         # either metric_val or metric_coverage will be provided
         self.metric_range_delta = self.metric_max_val - self.metric_min_val
-        
+
         # add missing pages to pebs
         if self.rebuild_pebs:
             # backup pebs_df before updating it
@@ -339,11 +339,11 @@ class Selector:
             if set(prev_layout_hugepages) == set(layout):
                 return True, row
         return False, None
-    
+
     def layout_was_run(self, layout_name, mem_layout):
         if self.results_df is None or self.results_df.empty:
             return False, None
-        
+
         prev_layout_res = None
         prev_layout_res = self.results_df.query(f'layout == "{layout_name}"')
         # prev_layout_res = self.results_df[self.results_df['layout'] == layout_name]
@@ -361,13 +361,13 @@ class Selector:
 
     def custom_log_layout_result(self, layout_res, old_result=False):
         pass
-    
+
     def log_layout_result(self, layout_res, old_result=False):
         tlb_misses = layout_res['stlb_misses']
         tlb_hits = layout_res['stlb_hits']
         walk_cycles = layout_res['walk_cycles']
         runtime = layout_res['cpu_cycles']
-        
+
         self.logger.info('-------------------------------------------')
         self.logger.info(f'Results:')
         self.logger.info(f'\tstlb-misses={Utils.format_large_number(tlb_misses)}')
@@ -377,7 +377,7 @@ class Selector:
         self.custom_log_layout_result(layout_res, old_result)
         # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
         self.logger.info('===========================================')
-        
+
     def run_workload(self, mem_layout, layout_name):
         # TODO: use below flow to check wether the layout content exists under different layout_name
         prev_res = self.get_layout_results(layout_name)
@@ -387,7 +387,7 @@ class Selector:
             self.layout_names.append(layout_name)
             self.log_layout_result(prev_res, True)
             return prev_res
-        
+
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
         # if the layout's measurements were found
         if found and prev_res is not None:
@@ -439,11 +439,11 @@ class Selector:
         self.logger.info(f'run workload under {layout_name} with {len(mem_layout)} hugepages')
         last_result = self.run_workload(mem_layout, layout_name)
         return last_result
-    
+
     def run_layouts(self, layouts):
         results_df = pd.DataFrame()
         for l in layouts:
             r = self.run_next_layout(l)
             results_df = results_df.append(r)
         return results_df
- 
+
