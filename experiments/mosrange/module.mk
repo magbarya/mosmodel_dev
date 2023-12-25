@@ -4,6 +4,9 @@ MODULE_NAME := experiments/$(MOSRANGE_EXPERIMENT_NAME)
 # workaround to skip removing the first measurement (layout1/repeat1/perf.out) 
 # when $(MEASUREMTENTS) target fails; MEASUREMENTS variable will contain now 
 # the layout results in reverse order.
+ifdef DEFAULT_NUM_LAYOUTS
+NUM_LAYOUTS := $(DEFAULT_NUM_LAYOUTS)
+endif
 LAYOUTS := $(shell seq 1 $(NUM_LAYOUTS) | tac)
 LAYOUTS := $(addprefix layout,$(LAYOUTS)) 
 

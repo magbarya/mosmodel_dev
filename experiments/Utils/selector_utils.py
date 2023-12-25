@@ -223,7 +223,11 @@ class Selector:
             # backup pebs_df before updating it
             self.orig_pebs_df = self.pebs_df.copy()
             self.orig_total_misses = self.total_misses
-            self.add_missing_pages_to_pebs()
+            self.pebs_df = self.add_missing_pages_to_pebs(self.pebs_df)
+            self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
+            # print(f'saving update pebs to: {os.getcwd()}/updated_pebs.csv')
+            # self.pebs_df.to_csv('updated_pebs.csv')
+            # sys.exit(0)
 
     def select_layout_from_pebs_gradually(self, pebs_coverage, pebs_df):
         mem_layout = []
@@ -285,15 +289,15 @@ class Selector:
                 break
         return lower_layout['hugepages'], upper_layout['hugepages']
 
-    def add_missing_pages_to_pebs(self):
-        pebs_pages = list(set(self.pebs_df['PAGE_NUMBER'].tolist()))
+    def add_missing_pages_to_pebs(self, pebs_df):
+        pebs_pages = list(set(pebs_df['PAGE_NUMBER'].tolist()))
         missing_pages = list(set(self.all_2mb_layout) - set(pebs_pages))
         #self.total_misses
         all_pebs_real_coverage = self.realMetricCoverage(self.all_pebs_r, 'stlb_misses')
         # normalize pages recorded by pebs based on their real coverage
         ratio = all_pebs_real_coverage / 100
-        self.pebs_df['TLB_COVERAGE'] *= ratio
-        self.pebs_df['NUM_ACCESSES'] = (self.pebs_df['NUM_ACCESSES'] * ratio).astype(int)
+        pebs_df['TLB_COVERAGE'] *= ratio
+        pebs_df['NUM_ACCESSES'] = (pebs_df['NUM_ACCESSES'] * ratio).astype(int)
         # add missing pages with a unified coverage ratio
         missing_pages_total_coverage = 100 - all_pebs_real_coverage
         total_missing_pages = len(missing_pages)
@@ -302,15 +306,16 @@ class Selector:
         missing_pages_coverage_ratio = missing_pages_total_coverage / total_missing_pages
         # update total_misses acording to the new ratio
         old_total_misses = self.total_misses
-        self.total_misses *= ratio
-        missing_pages_total_misses = self.total_misses - old_total_misses
+        self.total_misses = int(self.total_misses * ratio)
+        missing_pages_total_misses = old_total_misses - self.total_misses
         missing_pages_misses_ratio = missing_pages_total_misses / total_missing_pages
         # update pebs_df dataframe
         missing_pages_df = pd.DataFrame(
             {'PAGE_NUMBER': missing_pages,
              'NUM_ACCESSES': missing_pages_misses_ratio,
              'TLB_COVERAGE': missing_pages_coverage_ratio})
-        self.pebs_df = pd.concat([self.pebs_df, missing_pages_df], ignore_index=True)
+        pebs_df = pd.concat([pebs_df, missing_pages_df], ignore_index=True)
+        return pebs_df
 
     def write_layout(self, layout_name, mem_layout):
         self.logger.info(f'writing {layout_name} with {len(mem_layout)} hugepages')
@@ -436,8 +441,13 @@ class Selector:
     def run_next_layout(self, mem_layout):
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
-        self.logger.info(f'run workload under {layout_name} with {len(mem_layout)} hugepages')
+
+        self.logger.info('=======================================================')
+        self.logger.info(f'==> start running {layout_name} (#{len(mem_layout)} hugepages)')
         last_result = self.run_workload(mem_layout, layout_name)
+        self.logger.info(f'<== completed running {layout_name}')
+        self.logger.info('=======================================================')
+
         return last_result
 
     def run_layouts(self, layouts):
