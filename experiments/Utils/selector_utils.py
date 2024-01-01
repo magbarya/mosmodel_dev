@@ -158,23 +158,33 @@ class Selector:
 
         return pebs_df
 
-    def predictTlbMisses(self, mem_layout):
-        assert self.pebs_df is not None
-        expected_tlb_coverage = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
+    def predictTlbMisses(self, mem_layout, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
+
+        assert pebs_df is not None
+        expected_tlb_coverage = pebs_df.query(f'PAGE_NUMBER in {mem_layout}')['NUM_ACCESSES'].sum()
         expected_tlb_misses = self.total_misses - expected_tlb_coverage
         self.logger.debug(f'mem_layout of size {len(mem_layout)} has an expected-tlb-coverage={expected_tlb_coverage} and expected-tlb-misses={expected_tlb_misses}')
         return expected_tlb_misses
 
-    def pebsTlbCoverage(self, mem_layout):
-        assert self.pebs_df is not None
-        df = self.pebs_df.query(f'PAGE_NUMBER in {mem_layout}')
+    def pebsTlbCoverage(self, mem_layout, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
+
+        assert pebs_df is not None
+        df = pebs_df.query(f'PAGE_NUMBER in {mem_layout}')
         expected_tlb_coverage = df['TLB_COVERAGE'].sum()
         return expected_tlb_coverage
 
     def realMetricCoverage(self, layout_results, metric_name=None):
         if metric_name is None:
             metric_name = self.metric_name
-        layout_metric_val = layout_results[metric_name]
+        return self.realCoverage(layout_results[metric_name], metric_name)
+
+    def realCoverage(self, layout_metric_val, metric_name=None):
+        if metric_name is None:
+            metric_name = self.metric_name
         all_2mb_metric_val = self.all_2mb_r[metric_name]
         all_4kb_metric_val = self.all_4kb_r[metric_name]
         min_val = min(all_2mb_metric_val, all_4kb_metric_val)
@@ -407,7 +417,7 @@ class Selector:
             # if the layout was found but under different layout_name
             if found:
                 self.last_layout_num -= 1
-                assert False
+                # assert False
                 return prev_res
 
         self.num_generated_layouts += 1

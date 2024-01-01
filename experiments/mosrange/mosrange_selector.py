@@ -25,16 +25,19 @@ class MosrangeSelector(Selector):
                  num_repeats,
                  metric_name,
                  metric_val,
-                 metric_coverage) -> None:
+                 metric_coverage,
+                 range_epsilon=0.01) -> None:
         self.num_generated_layouts = 0
         self.metric_val = metric_val
         self.metric_coverage = metric_coverage
+        self.range_epsilon = range_epsilon
         self.search_pebs_threshold = 0.5
         self.last_lo_layout = None
         self.last_hi_layout = None
         self.last_layout_result = None
         self.last_runtime_range = 0
         self.head_pages_coverage_threshold = 2
+        self.num_initial_layouts = 0
         super().__init__(memory_footprint_file,
                          pebs_mem_bins_file,
                          exp_root_dir,
@@ -57,71 +60,57 @@ class MosrangeSelector(Selector):
         else:
             self.metric_coverage = ((self.metric_max_val - self.metric_val) / self.metric_range_delta) * 100
 
-    def get_surrounding_layouts(self, res_df, surrounding_percentile=0.01, layout_pair_idx=0):
-        df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
-        delta = surrounding_percentile * self.metric_val
-
-        lo_layouts_df = df.query(f'{self.metric_name} < {self.metric_val}')
-        assert len(lo_layouts_df) > 0
-        lo_layouts_max = lo_layouts_df[self.metric_name].max()
-        lo_layouts_min = lo_layouts_max - delta
-
-        hi_layouts_df = df.query(f'{self.metric_name} >= {self.metric_val}')
-        assert len(hi_layouts_df) > 0
-        hi_layouts_min = hi_layouts_df[self.metric_name].min()
-        hi_layouts_max = hi_layouts_min + delta
-
-        lo_layouts_df = lo_layouts_df.query(f'{self.metric_name} >= {lo_layouts_min}')
-        hi_layouts_df = hi_layouts_df.query(f'{self.metric_name} <= {hi_layouts_max}')
-        assert len(lo_layouts_df) > 0
-        assert len(hi_layouts_df) > 0
-        all_pairs_df = lo_layouts_df.merge(hi_layouts_df, how='cross', suffixes=['_lo', '_hi'])
-        all_pairs_df['runtime_diff'] = abs(all_pairs_df['cpu_cycles_lo'] - all_pairs_df['cpu_cycles_hi'])
-        all_pairs_df = all_pairs_df.sort_values('runtime_diff', ascending=False).reset_index(drop=True)
+    def get_surrounding_pair(self, res_df, layout_pair_idx=0, by='cpu_cycles', ascending=False, return_full_result=False):
+        all_pairs_df = self.get_surrounding_layouts(res_df, by, ascending)
+        
         if layout_pair_idx >= len(all_pairs_df):
             layout_pair_idx = 0
         selected_pair = all_pairs_df.iloc[layout_pair_idx]
 
-        lo_layout = selected_pair['hugepages_lo']
-        hi_layout = selected_pair['hugepages_hi']
+        self.logger.debug(f'-------------------------------------------------------')
+        self.logger.debug(f'get_surrounding_layouts: selected layouts [{selected_pair["layout_lo"]} , {selected_pair["layout_hi"]}]')
+        self.logger.debug(f'\t selected layouts:')
+        self.logger.debug(f'\n{selected_pair}')
+        self.logger.debug(f'-------------------------------------------------------')
+
+        lo_layout = selected_pair[f'hugepages_lo']
+        hi_layout = selected_pair[f'hugepages_hi']
+        if return_full_result:
+            cols = selected_pair.keys()
+            # remove duplicates
+            cols = list(set(cols))
+            lo_cols = [c for c in cols if c.endswith('_lo')]
+            hi_cols = [c for c in cols if c.endswith('_hi')]
+            # split the result to two serieses
+            lo_layout = selected_pair[lo_cols]
+            hi_layout = selected_pair[hi_cols]
+            # remove suffixes
+            lo_cols = [c.replace('_lo', '') for c in lo_cols]
+            hi_cols = [c.replace('_hi', '') for c in hi_cols]
+            # rename columns (by removing the _lo and _hi suffixes)
+            lo_layout = lo_layout.set_axis(lo_cols)
+            hi_layout = hi_layout.set_axis(hi_cols)
 
         return lo_layout, hi_layout
 
+    def get_surrounding_layouts(self, res_df, by='cpu_cycles', ascending=False):
+        df = res_df.sort_values(self.metric_name, ascending=True).reset_index(drop=True)
+        lo_layouts_df = df.query(f'{self.metric_name} < {self.metric_val}')
+        assert len(lo_layouts_df) > 0
+
+        hi_layouts_df = df.query(f'{self.metric_name} >= {self.metric_val}')
+        assert len(hi_layouts_df) > 0
+
+        all_pairs_df = lo_layouts_df.merge(hi_layouts_df, how='cross', suffixes=['_lo', '_hi'])
+        all_pairs_df[f'{by}_diff'] = abs(all_pairs_df[f'{by}_lo'] - all_pairs_df[f'{by}_hi'])
+        all_pairs_df = all_pairs_df.sort_values(f'{by}_diff', ascending=ascending).reset_index(drop=True)
+        
+        return all_pairs_df
+
     def __try_select_layout_random_order(self, pebs_df, pebs_coverage,
                                          include_pages=[], epsilon=0.5, exclude_pages=None):
-        include_pages_weight = self.pebsTlbCoverage(include_pages)
-        rem_weight = pebs_coverage - include_pages_weight
-        if rem_weight < 0:
-            return []
-
-        self.logger.debug(f'--> __try_select_layout_random_order(): pebs_coverage={pebs_coverage} , #include_pages={len(include_pages)} , include_pages_coverage={include_pages_weight} , epsilon={epsilon}')
-
-        if exclude_pages:
-            pebs_df = pebs_df.query(f'PAGE_NUMBER not in {exclude_pages}')
-        if include_pages:
-            pebs_df = pebs_df.query(f'PAGE_NUMBER not in {include_pages}')
-
-        pebs_df = pebs_df.sample(len(pebs_df))
-
-        mem_layout = include_pages.copy()
-        for index, row in pebs_df.iterrows():
-            page = row['PAGE_NUMBER']
-            weight = row['TLB_COVERAGE']
-            if weight <= (rem_weight + epsilon):
-                mem_layout.append(page)
-                rem_weight -= weight
-            if rem_weight <= epsilon:
-                break
-        # could not find subset of pages to add that leads to the required coverage
-        if rem_weight > epsilon:
-            rem_pages = self.try_select_layout(pebs_df, pebs_coverage, include_pages=mem_layout)
-            if rem_pages:
-                mem_layout += rem_pages
-            else:
-                self.logger.debug(f'<-- __try_select_layout_random_order: could not select layout for pebs_coverage={pebs_coverage} with epsilon={epsilon}')
-                return []
-        self.logger.debug(f'<-- __try_select_layout_random_order: found layout with {len(mem_layout)} hugepages')
-        return mem_layout
+        return self.try_select_layout(pebs_df=pebs_df, pebs_coverage=pebs_coverage, include_pages=include_pages, 
+                                      epsilon=2, exclude_pages=exclude_pages, sample_pebs=True)
 
     def __try_select_layout_random_size(self, pebs_df,
                                       pebs_coverage,
@@ -149,6 +138,7 @@ class MosrangeSelector(Selector):
                                  include_pages=[], exclude_pages=None,
                                  sort_ascending=False, tmp_layouts=[],
                                  randomization='order'):
+        self.logger.debug(f'try_select_layout_random: pebs_coverage={pebs_coverage}')
         layout = []
         for i in range(self.num_layouts):
             if randomization == 'order':
@@ -166,13 +156,16 @@ class MosrangeSelector(Selector):
                                                             sort_ascending=sort_ascending,
                                                             num_samples=len(pebs_df)-i)
             if layout and self.isPagesListUnique(layout, self.layouts + tmp_layouts):
+                self.logger.debug(f'try_select_layout_random: found layout with #{len(layout)} hugepages')
                 return layout
+            elif layout:
+                self.logger.debug(f'try_select_layout_random: found existing layout with #{len(layout)} hugepages')
         return []
 
     def try_select_layout_dynamic_epsilon(self, pebs_df, pebs_coverage,
                                           include_pages=[], max_epsilon=2,
                                           exclude_pages=None, sort_ascending=False):
-        include_pages_weight = self.pebsTlbCoverage(include_pages)
+        include_pages_weight = self.pebsTlbCoverage(include_pages, pebs_df)
         if include_pages_weight > pebs_coverage:
             return []
         epsilon = 0.5
@@ -183,8 +176,9 @@ class MosrangeSelector(Selector):
             epsilon += 0.5
         return []
 
-    def try_select_layout(self, pebs_df, pebs_coverage, include_pages=[], epsilon=0.5, exclude_pages=None, sort_ascending=False):
-        include_pages_weight = self.pebsTlbCoverage(include_pages)
+    def try_select_layout(self, pebs_df, pebs_coverage, include_pages=[], epsilon=0.5, 
+                          exclude_pages=None, sort_ascending=False, sample_pebs=False):
+        include_pages_weight = self.pebsTlbCoverage(include_pages, pebs_df)
         self.logger.debug(f'** try_select_layout(): pebs_coverage={pebs_coverage} , #include_pages={len(include_pages)} , include_pages_coverage={include_pages_weight} , epsilon={epsilon}')
 
         rem_weight = pebs_coverage - include_pages_weight
@@ -200,6 +194,9 @@ class MosrangeSelector(Selector):
             pebs_df = pebs_df.query(f'PAGE_NUMBER not in {include_pages}')
         pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=sort_ascending)
 
+        if sample_pebs:
+            pebs_df = pebs_df.sample(len(pebs_df))
+            
         mem_layout = include_pages.copy()
         for index, row in pebs_df.iterrows():
             page = row['PAGE_NUMBER']
@@ -216,7 +213,9 @@ class MosrangeSelector(Selector):
         self.logger.debug(f'<-- try_select_layout(): found layout with {len(mem_layout)} hugepages')
         return mem_layout
 
-    def combine_layouts(self, layout1, layout2):
+    def combine_layouts(self, layout1, layout2, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
         layout1_set = set(layout1)
         layout2_set = set(layout2)
         only_in_layout1 = list(layout1_set - layout2_set)
@@ -227,30 +226,28 @@ class MosrangeSelector(Selector):
 
         # first chance: try to select half their combined weight
         search_space = only_in_layout1 + only_in_layout2
-        weight = self.pebsTlbCoverage(search_space)
+        weight = self.pebsTlbCoverage(search_space, pebs_df)
         expected_coverage = weight / 2
-        pebs_df = self.pebs_df.query(f'PAGE_NUMBER in {search_space}')
-        subset = self.try_select_layout_dynamic_epsilon(pebs_df, expected_coverage)
+        ss_pebs_df = pebs_df.query(f'PAGE_NUMBER in {search_space}')
+        subset = self.try_select_layout_dynamic_epsilon(ss_pebs_df, expected_coverage)
         if subset:
             mem_layout += subset
             return list(set(mem_layout))
 
         # second chance: try to combine layouts randomally
-        rand_layout = self.combine_layouts_semi_random(layout1, layout2)
+        rand_layout = self.combine_layouts_semi_random(layout1, layout2, pebs_df)
         if rand_layout and self.isPagesListUnique(rand_layout, self.layouts):
             return rand_layout
 
         # third chance: try to combine layouts blindly
-        only_in_layout1_df = self.pebs_df.query(f'PAGE_NUMBER in {only_in_layout1}').sort_values('TLB_COVERAGE')
-        only_in_layout1 = only_in_layout1_df['PAGE_NUMBER'].to_list()
-        only_in_layout2_df = self.pebs_df.query(f'PAGE_NUMBER in {only_in_layout2}').sort_values('TLB_COVERAGE')
-        only_in_layout2 = only_in_layout2_df['PAGE_NUMBER'].to_list()
         mem_layout += only_in_layout1[0::2]
         mem_layout += only_in_layout2[0::2]
 
         return list(set(mem_layout))
 
-    def combine_layouts_semi_random(self, layout1, layout2):
+    def combine_layouts_semi_random(self, layout1, layout2, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
         layout1_set = set(layout1)
         layout2_set = set(layout2)
         only_in_layout1 = list(layout1_set - layout2_set)
@@ -261,12 +258,12 @@ class MosrangeSelector(Selector):
 
         # define the search space to add left pages from
         search_space = only_in_layout1 + only_in_layout2
-        pebs_df = self.pebs_df.query(f'PAGE_NUMBER in {search_space}')
+        pebs_df = pebs_df.query(f'PAGE_NUMBER in {search_space}')
         # Determine the maximum number of rows to select
         max_rows_to_select = len(pebs_df)  # Maximum number of rows available
 
         # try to select half their combined weight
-        weight = self.pebsTlbCoverage(search_space)
+        weight = self.pebsTlbCoverage(search_space, pebs_df)
         expected_coverage = weight / 2
         for i in range(self.num_layouts):
             # Select a random number of rows (between 1 and max_rows_to_select)
@@ -281,9 +278,8 @@ class MosrangeSelector(Selector):
         return []
 
     def calculate_runtime_range(self):
-        epsilon = 0.005
-        metric_low_val = self.metric_val * (1 - epsilon)
-        metric_hi_val = self.metric_val * (1 + epsilon)
+        metric_low_val = self.metric_val * (1 - self.range_epsilon)
+        metric_hi_val = self.metric_val * (1 + self.range_epsilon)
         range_df = self.results_df.query(f'{metric_hi_val} >= {self.metric_name} >= {metric_low_val}')
 
         if len(range_df) < 2:
@@ -303,59 +299,31 @@ class MosrangeSelector(Selector):
         diff_ratio = diff / self.metric_val
         return diff_ratio < 0.01
 
-    def is_result_within_target_range(self, layout_res, percentile=0.005):
+    def is_result_within_target_range(self, layout_res):
         if layout_res is None:
             return False
-        min_val = self.metric_val * (1 - percentile)
-        max_val = self.metric_val * (1 + percentile)
+        min_val = self.metric_val * (1 - self.range_epsilon)
+        max_val = self.metric_val * (1 + self.range_epsilon)
         val = layout_res[self.metric_name]
         return min_val <= val <= max_val
 
-    def get_layounts_within_target_range(self, percentile=0.005):
-        min_val = self.metric_val * (1 - percentile)
-        max_val = self.metric_val * (1 + percentile)
+    def get_layounts_within_target_range(self):
+        min_val = self.metric_val * (1 - self.range_epsilon)
+        max_val = self.metric_val * (1 + self.range_epsilon)
         res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
         return res
 
-    def get_highest_runtime_layout_in_range(self, percentile=0.005):
-        range_layouts = self.get_layounts_within_target_range(percentile)
+    def get_highest_runtime_layout_in_range(self):
+        range_layouts = self.get_layounts_within_target_range()
         hi_runtime = range_layouts['cpu_cycles'].max()
         hi_layout = range_layouts[range_layouts['cpu_cycles'] == hi_runtime].iloc[0]
         return hi_layout['hugepages']
 
-    def select_single_random_layout(self, all_pages, tmp_layouts=[]):
-        while True:
-            layout_size = random.randint(1, len(all_pages))
-            layout = random.sample(all_pages, layout_size)
-            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts)):
-                return layout
-        assert False
-
-    def select_initial_layouts_blindly_random(self, tmp_layouts=[], max_num_layouts=10):
-        self.logger.info(f'--> select_initial_layouts_blindly_random() entry')
-        mem_layouts = []
-        for i in range(max_num_layouts):
-            layout = self.select_single_random_layout(self.all_pages, tmp_layouts+mem_layouts)
-            mem_layouts.append(layout)
-        self.logger.info(f'<-- select_initial_layouts_blindly_random() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
-
-    def select_initial_layouts_pagenumbers_random(self, tmp_layouts=[], max_num_layouts=10):
-        self.logger.info(f'--> select_initial_layouts_pagenumbers_random() entry')
-
-        mem_layouts = []
-        range_list = [2**i for i in range(1, max_num_layouts*2)]
-        for i in range_list:
-            pages_subset = [page_num for page_num in self.all_pages if page_num % i == 0]
-            if len(pages_subset) == 0:
-                continue
-            layout = self.select_single_random_layout(pages_subset, tmp_layouts+mem_layouts)
-            mem_layouts.append(layout)
-            if len(mem_layouts) >= max_num_layouts:
-                break
-
-        self.logger.info(f'<-- select_initial_layouts_pagenumbers_random() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
+    def get_lowest_runtime_layout_in_range(self):
+        range_layouts = self.get_layounts_within_target_range()
+        lo_runtime = range_layouts['cpu_cycles'].min()
+        lo_layout = range_layouts[range_layouts['cpu_cycles'] == lo_runtime].iloc[0]
+        return lo_layout['hugepages']
 
     def select_initial_layouts_weighted_random(self, tmp_layouts=[], max_num_layouts=10):
         self.logger.info(f'--> select_initial_layouts() entry')
@@ -373,57 +341,28 @@ class MosrangeSelector(Selector):
         self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
         return mem_layouts
 
-    def select_initial_layouts_odd_even_pagenumbers(self, tmp_layouts=[], max_num_layouts=10):
+    def select_initial_layouts_minimal_tail_pages(self, tmp_layouts=[], max_num_layouts=5, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.orig_pebs_df
         self.logger.info(f'--> select_initial_layouts() entry')
 
-        mem_layouts = []
-        even_pebds_df = self.pebs_df.query(f'PAGE_NUMBER % {2} == 0')
-        odd_pebds_df = self.pebs_df.query(f'PAGE_NUMBER % {2} == 1')
-        for i in range(max_num_layouts):
-            if i%2:
-                layout = self.try_select_layout_random(even_pebds_df, self.metric_coverage, tmp_layouts=tmp_layouts+mem_layouts)
-            else:
-                layout = self.try_select_layout_random(odd_pebds_df, self.metric_coverage, tmp_layouts=tmp_layouts+mem_layouts)
-            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
-                mem_layouts.append(layout)
-
-        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
-
-    def select_initial_layouts_pagenumbers_multiplies(self, tmp_layouts=[], max_num_layouts=10):
-        self.logger.info(f'--> select_initial_layouts() entry')
-
-        mem_layouts = []
-        for i in range(3, 17):
-            pebs_df = self.pebs_df.query(f'PAGE_NUMBER % {i} == 0')
-            if pebs_df.empty:
-                continue
-            layout = self.try_select_layout_random(pebs_df, self.metric_coverage, tmp_layouts=tmp_layouts+mem_layouts)
-            if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
-                mem_layouts.append(layout)
-                if len(mem_layouts) >= max_num_layouts:
-                    break
-
-        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
-
-    def select_initial_layouts_minimal_tail_pages(self, tmp_layouts=[], max_num_layouts=10):
-        self.logger.info(f'--> select_initial_layouts() entry')
-
-        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
-        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
+        # head_pebs_df = pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
+        # head_rows = head_pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(5)
+        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(5)
         head_pages = head_rows['PAGE_NUMBER'].to_list()
         # create eight layouts as all subgroups of these three group layouts
         all_subsets = []
         for subset_size in range(len(head_pages)+1):
             for subset in itertools.combinations(head_pages, subset_size):
                 layout = list(subset)
-                layout_pebs = self.pebsTlbCoverage(layout)
+                layout_pebs = self.pebsTlbCoverage(layout, pebs_df)
                 layout.sort()
                 all_subsets.append({'hugepages': layout, 'pebs_coverage': layout_pebs})
         all_subsets_df = pd.DataFrame.from_records(all_subsets)
-        all_subsets_df['diff'] = self.metric_coverage - all_subsets_df['pebs_coverage']
-        all_subsets_df = all_subsets_df.query('diff >= 0').sort_values('diff', ascending=True)
+        # all_subsets_df['diff'] = self.metric_coverage - all_subsets_df['pebs_coverage']
+        # all_subsets_df = all_subsets_df.query('diff >= 0').sort_values('diff', ascending=True)
+        all_subsets_df['diff'] = abs(self.metric_coverage - all_subsets_df['pebs_coverage'])
+        all_subsets_df = all_subsets_df.sort_values('diff', ascending=True)
         all_subsets_df = all_subsets_df.head(max_num_layouts)
 
         mem_layouts = []
@@ -431,7 +370,7 @@ class MosrangeSelector(Selector):
 
         for include_pages in base_layouts:
             exclude_pages = list(set(head_pages) - set(include_pages))
-            layout = self.try_select_layout_random(self.pebs_df,
+            layout = self.try_select_layout_random(pebs_df,
                                                    self.metric_coverage,
                                                    include_pages=include_pages,
                                                    exclude_pages=exclude_pages,
@@ -442,260 +381,23 @@ class MosrangeSelector(Selector):
         self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
         return mem_layouts
 
-    def select_initial_layouts_headpages_subgroups(self, tmp_layouts=[], max_num_layouts=10, subset_size_ascending=False):
-        self.logger.info(f'--> select_initial_layouts() entry')
-
-        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
-        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
-        head_pages = head_rows['PAGE_NUMBER'].to_list()
-        mem_layouts = []
-        # create eight layouts as all subgroups of these three group layouts
-        if subset_size_ascending:
-            subsets_size_range = range(len(head_pages)+1)
-        else:
-            subsets_size_range = range(len(head_pages), 0, -1)
-        for subset_size in subsets_size_range:
-            for subset in itertools.combinations(head_pages, subset_size):
-                include_pages = list(subset)
-                exclude_pages = list(set(head_pages) - set(include_pages))
-                self.logger.debug(f'** try to find initial layout that contains pages: {include_pages} **')
-                layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                                include_pages, max_epsilon=5, exclude_pages=exclude_pages)
-                if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
-                    mem_layouts.append(layout)
-                    if len(mem_layouts) >= max_num_layouts:
-                        break
-                    # # for each subset size will select only one layout (which is enough)
-                    # break
-            if len(mem_layouts) >= max_num_layouts:
-                break
-
-        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
-
-    def select_initial_layouts_headpages_candidates(self, tmp_layouts=[], max_num_layouts=10):
-        self.logger.info(f'--> select_initial_layouts() entry')
-
-        pebs_df = self.orig_pebs_df.query(f'TLB_COVERAGE >= {self.head_pages_coverage_threshold}')
-        head_rows = pebs_df.sort_values('TLB_COVERAGE', ascending=False).head(10)
-        head_pages = head_rows['PAGE_NUMBER'].to_list()
-        mem_layouts = []
-        # create eight layouts as all subgroups of these three group layouts
-        for subset_size in range(len(head_pages)+1):
-            for subset in itertools.combinations(head_pages, subset_size):
-                include_pages = list(subset)
-                exclude_pages = list(set(head_pages) - set(include_pages))
-                self.logger.debug(f'** try to find initial layout that contains pages: {include_pages} **')
-                layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                                include_pages, max_epsilon=5, exclude_pages=exclude_pages)
-                if layout and self.isPagesListUnique(layout, (self.layouts+tmp_layouts+mem_layouts)):
-                    mem_layouts.append(layout)
-                    # for each subset size will select only one layout (which is enough)
-                    break
-
-        self.logger.info(f'<-- select_initial_layouts() exit: selected #{len(mem_layouts)} layouts')
-        return mem_layouts
-
-    def select_initial_layouts_special_v2(self):
-        mem_layouts = []
-        # try select layout that includes all pages were not sampled by PEBS
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=self.pages_not_in_pebs,
-                                                        max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        # try select layout that excludes all pages were not sampled by PEBS
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        exclude_pages=self.pages_not_in_pebs,
-                                                        max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        tmp_pebs_df = self.pebs_df.copy()
-        tmp_pebs_df = tmp_pebs_df.sort_values('TLB_COVERAGE', ascending=True)
-        tmp_pebs_df['tail_cumsum'] = tmp_pebs_df['TLB_COVERAGE'].cumsum()
-
-        tmp_pebs_df['head_cumsum'] = 100
-        tmp_pebs_df[tmp_pebs_df['TLB_COVERAGE'] >= 1]['head_cumsum'] = tmp_pebs_df[tmp_pebs_df['TLB_COVERAGE'] >= 1]['TLB_COVERAGE'].cumsum()
-
-        tail_pages = tmp_pebs_df.query(f'tail_cumsum <= {self.metric_coverage}')['PAGE_NUMBER'].to_list()
-        head_pages = tmp_pebs_df.query(f'head_cumsum <= {self.metric_coverage}')['PAGE_NUMBER'].to_list()
-        # try select layout that includes tail_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=tail_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that excludes tail_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        exclude_pages=tail_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that includes head_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=head_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that excludes head_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        exclude_pages=head_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout with all head pages and then tail pages
-        head_pages_coverage = self.pebs_df.query(f'PAGE_NUMBER in {head_pages}')['TLB_COVERAGE'].sum()
-        tail_pages_coverage = self.metric_coverage - head_pages_coverage
-        selected_tail_pages = tmp_pebs_df.query(f'tail_cumsum <= {tail_pages_coverage}')['PAGE_NUMBER'].to_list()
-        base_pages = head_pages + selected_tail_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=base_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        # try select layout according to the expected coverage
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        max_epsilon=2)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        #
-        prev_layout = layout.copy()
-        tail_pages = tmp_pebs_df.query(f'tail_cumsum < 5')['PAGE_NUMBER'].to_list()
-        layout = list(set(prev_layout + tail_pages))
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        return mem_layouts
-
-
-    def select_initial_layouts_special(self):
-        mem_layouts = []
-        pages_not_in_pebs_weight = self.pebsTlbCoverage(self.pages_not_in_pebs)
-        coverage_without_not_in_pebs = self.metric_coverage - pages_not_in_pebs_weight
-
-        # try select layout that includes all pages were not sampled by PEBS
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=self.pages_not_in_pebs,
-                                                        max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        # try select layout that excludes all pages were not sampled by PEBS
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        exclude_pages=self.pages_not_in_pebs,
-                                                        max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-        # try select layout that includes all pages were not sampled by PEBS only by using sampled pages and metric_coverage
-        layout = self.try_select_layout_dynamic_epsilon(self.orig_pebs_df, self.metric_coverage, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that includes all pages were not sampled by PEBS only by using sampled pages and updated coverage
-        layout = self.try_select_layout_dynamic_epsilon(self.orig_pebs_df, coverage_without_not_in_pebs, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-
-
-        tmp_pebs_df = self.orig_pebs_df.copy()
-        tmp_pebs_df = tmp_pebs_df.sort_values('TLB_COVERAGE', ascending=True)
-        tmp_pebs_df['tail_cumsum'] = tmp_pebs_df['TLB_COVERAGE'].cumsum()
-
-        tmp_pebs_df['head_cumsum'] = 100
-        q = tmp_pebs_df.query('TLB_COVERAGE >= 1').sort_values('TLB_COVERAGE', ascending=True)
-        total = 0
-        for index, row in q.iterrows():
-            total += row['TLB_COVERAGE']
-            tmp_pebs_df.at[index, 'head_cumsum'] = total
-
-        tail_pages = tmp_pebs_df.query(f'tail_cumsum <= {self.metric_coverage}')['PAGE_NUMBER'].to_list()
-        head_pages = tmp_pebs_df.query(f'head_cumsum <= {self.metric_coverage}')['PAGE_NUMBER'].to_list()
-        # try select layout that includes tail_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.orig_pebs_df, self.metric_coverage,
-                                                        include_pages=tail_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that excludes tail_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.orig_pebs_df, self.metric_coverage,
-                                                        exclude_pages=tail_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that includes head_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        include_pages=head_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # try select layout that excludes head_pages
-        layout = self.try_select_layout_dynamic_epsilon(self.orig_pebs_df, self.metric_coverage,
-                                                        exclude_pages=head_pages, max_epsilon=5)
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        layout += self.pages_not_in_pebs
-        if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-            mem_layouts.append(layout)
-        # 1) try select layout according to the expected coverage
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, self.metric_coverage,
-                                                        max_epsilon=2)
-        if layout:
-            tail_pages = tmp_pebs_df.query(f'tail_cumsum < 5')['PAGE_NUMBER'].to_list()
-            layout = list(set(layout + tail_pages))
-            if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-                mem_layouts.append(layout)
-        # 2)
-        layout = self.try_select_layout_dynamic_epsilon(self.pebs_df, coverage_without_not_in_pebs,
-                                                        max_epsilon=2)
-        if layout:
-            tail_pages = tmp_pebs_df.query(f'tail_cumsum < 5')['PAGE_NUMBER'].to_list()
-            layout = list(set(layout + tail_pages + self.pages_not_in_pebs))
-            if layout and self.isPagesListUnique(layout, (self.layouts+mem_layouts)):
-                mem_layouts.append(layout)
-
-        return mem_layouts
-
     def select_initial_layouts(self):
         mem_layouts = []
         debug_info = []
         mem_layouts_len = 0
         prev_len = 0
 
-        '''
+        # prev_len = len(mem_layouts)
+        # mem_layouts += self.select_initial_layouts_weighted_random(mem_layouts, 5)
+        # mem_layouts_len = len(mem_layouts) - mem_layouts_len
+        # mem_layouts_len = len(mem_layouts) - prev_len
+        # debug_info.append({'method': 'weighted_random', 'num_layouts': mem_layouts_len})
+        
         prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_blindly_random(mem_layouts, 5)
+        mem_layouts += self.select_initial_layouts_minimal_tail_pages(mem_layouts, 10, self.orig_pebs_df)
         mem_layouts_len = len(mem_layouts) - mem_layouts_len
         mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'blindly_random', 'num_layouts': mem_layouts_len})
-
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_pagenumbers_random(mem_layouts, 5)
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'pagenumbers_random', 'num_layouts': mem_layouts_len})
-
-        '''
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_weighted_random(mem_layouts, 5)
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'weighted_random', 'num_layouts': mem_layouts_len})
-
-        prev_len = len(mem_layouts)
-        mem_layouts += self.select_initial_layouts_special()
-        mem_layouts_len = len(mem_layouts) - mem_layouts_len
-        mem_layouts_len = len(mem_layouts) - prev_len
-        debug_info.append({'method': 'special', 'num_layouts': mem_layouts_len})
+        debug_info.append({'method': 'minimal_tail_pages', 'num_layouts': mem_layouts_len})
 
         print('=======================================================')
         from_layout = 4
@@ -707,13 +409,14 @@ class MosrangeSelector(Selector):
             from_layout += num_layouts
         print('=======================================================')
 
+        self.num_initial_layouts = len(mem_layouts)
         return mem_layouts
 
     def combine_surrounding_layouts(self, results_df):
-        surrounding_percentile = 0.01
+        surrounding_percentile = self.range_epsilon
         while surrounding_percentile < 1:
             for idx in range(self.num_layouts):
-                lower_layout, upper_layout = self.get_surrounding_layouts(results_df, surrounding_percentile, idx)
+                lower_layout, upper_layout = self.get_surrounding_pair(results_df, surrounding_percentile, idx)
                 # if the same surrounding layouts selected, then try to find another pair
                 if self.last_lo_layout is not None \
                     and self.last_hi_layout is not None \
@@ -799,7 +502,61 @@ class MosrangeSelector(Selector):
 
         return res_df
 
-    def select_desired_layout(self):
+    def select_desired_layout(self, base_layout, base_layout_real_coverage, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
+        base_coverage =self.pebsTlbCoverage(base_layout, pebs_df)
+        # use abs(diff) + base to cover rare cases where the base_coverage could be higher than the metric_coverage
+        diff_real = self.metric_coverage - base_layout_real_coverage
+        assert diff_real > 0 # base_layout was selected such that it's one of the nearest layouts with lower coverage
+        layout_pebs_step = 4
+        layout_pebs = min(100, base_coverage + layout_pebs_step)
+        prev_layout_real = base_layout_real_coverage
+        prev_layout_pebs = layout_pebs
+        last_pebs_step = 0
+        while True:
+            self.logger.info(f'select_desired_layout: trying to select layout with pebs-coverage={layout_pebs}')
+            layout = self.try_select_layout_dynamic_epsilon(pebs_df, layout_pebs,
+                                                            include_pages=base_layout, max_epsilon=2,
+                                                            exclude_pages=None, sort_ascending=False)
+            self.logger.info('=======================================================')
+            self.logger.info(f'==> select_desired_layout: selecting layout: #{self.last_layout_num+1} with #{len(layout)} hugepages')
+
+            if not layout or not self.isPagesListUnique(layout, self.layouts):
+                self.logger.info(f'<== select_desired_layout: could not find new layout')
+                self.logger.info('=======================================================')
+                return False
+
+            # run the layout
+            self.last_layout_result = self.run_next_layout(layout)
+
+            # check if the goal is acheived, i.e., layout result falls in the range
+            if self.is_result_within_target_range(self.last_layout_result):
+                self.logger.info('=======================================================')
+                self.logger.info(f'+++ layout{self.last_layout_num} result falls within desired range +++')
+                self.logger.info('=======================================================')
+                return True
+            
+            # adapt the layout_pebs according to last layout result
+            layout_real = self.realMetricCoverage(self.last_layout_result)
+            if layout_real > self.metric_coverage:
+                layout_pebs_step = (last_pebs_step + layout_pebs_step) / 2
+                layout_pebs = base_coverage + layout_pebs_step
+                layout_pebs = max(0, layout_pebs)
+                self.logger.info(f'*** real coverage={layout_real} > metric_coverage={self.metric_coverage} ==> pebs: {prev_layout_pebs}-->{layout_pebs}')
+            else:
+                last_pebs_step = layout_pebs_step
+                layout_pebs_step *= 1.5
+                layout_pebs = base_coverage + layout_pebs_step
+                layout_pebs = min(layout_pebs, 100)
+                self.logger.info(f'*** real coverage={layout_real} < metric_coverage={self.metric_coverage} ==> pebs: {prev_layout_pebs}-->{layout_pebs}')
+            
+            self.logger.info(f'prev real coverage: {prev_layout_real} ==> {layout_real} last layout real coverage')
+            self.logger.info(f'prev pebs coverage: {prev_layout_pebs} ==> {layout_pebs} next pebs coverage')
+            prev_layout_real = layout_real
+            prev_layout_pebs = layout_pebs
+
+    def select_desired_layout_v2(self):
         self.logger.info('=======================================================')
         self.logger.info(f'==> select_desired_layout: selecting layout: #{self.last_layout_num+1}')
 
@@ -817,19 +574,60 @@ class MosrangeSelector(Selector):
             return True
         return False
 
-    def find_desired_layout(self):
-        found_desired_layout = False
-        while not found_desired_layout:
-            found_desired_layout = self.select_desired_layout()
+    def combine_layout_and_test_in_range(self, layout1, layou2, pebs_df=None):
+        if pebs_df is None:
+            pebs_df = self.pebs_df
+        mem_layout = self.combine_layouts(layout1, layou2, pebs_df)
+        if not mem_layout or not self.isPagesListUnique(mem_layout, self.layouts):
+            return False
+        # run the layout
+        self.last_layout_result = self.run_next_layout(mem_layout)
 
-    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2):
+        # check if the goal is acheived, i.e., layout result falls in the range
+        if self.is_result_within_target_range(self.last_layout_result):
+            self.logger.info('=======================================================')
+            self.logger.info(f'+++ layout{self.last_layout_num} result falls within desired range +++')
+            self.logger.info('=======================================================')
+            return True
+        return False
+    
+    def find_desired_layout(self):
+        pebs_df = self.pebs_df
+        # pebs_df = self.orig_pebs_df
+        while True:
+            last_hi_layout_name = None
+            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            # try to select layout that yields a data point at the desired metric_val
+            for idx in range(len(all_pairs_df)):
+                pair = all_pairs_df.iloc[idx]
+                lo_layout = pair['hugepages_lo']
+                hi_layout = pair['hugepages_hi']
+                
+                # # 1st selection method by merging surrounding layouts of the desired metric_val
+                # if self.combine_layout_and_test_in_range(lo_layout, hi_layout, pebs_df):
+                #     return True
+                
+                hi_layout_name = pair['layout_hi']
+                if hi_layout_name == last_hi_layout_name:
+                    continue
+                last_hi_layout_name = hi_layout_name                
+                # 2nd selection method by expanding layouts with lower values
+                hi_real_coverage = self.realCoverage(pair[f'{self.metric_name}_hi'], self.metric_name)
+                if self.select_desired_layout(hi_layout, hi_real_coverage, pebs_df):
+                    return True
+                
+
+    def get_tail_pages(self, threshold=0.01, total_threshold=2):
         tail_pages_df = self.pebs_df.query(f'TLB_COVERAGE < {threshold}')
         tail_pages_df = tail_pages_df.sort_values('TLB_COVERAGE', ascending=True)
         tail_pages_df['tail_cumsum'] = tail_pages_df['TLB_COVERAGE'].cumsum()
         tail_pages_df = tail_pages_df.query(f'tail_cumsum <= {total_threshold}')
-
         tail_pages = tail_pages_df['PAGE_NUMBER'].to_list()
-        num_tail_pages = len(tail_pages_df)
+        return tail_pages
+
+    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2):
+        tail_pages = self.get_tail_pages(threshold, total_threshold)
+        num_tail_pages = len(tail_pages)
         assert num_tail_pages > self.num_layouts
         num_groups = self.num_layouts
         group_size = num_tail_pages // num_groups
@@ -837,7 +635,67 @@ class MosrangeSelector(Selector):
 
         return groups
 
+    def add_tails_pages_func(self, base_pages, tested_tail_pages, subset):
+        layout = list(set(base_pages + tested_tail_pages + subset))
+        return layout
+
+    def remove_tails_pages_func(self, base_pages, tested_tail_pages, subset):
+        layout = list(set(base_pages) - set(tested_tail_pages) - set(subset))
+        return layout
+
+    def binary_search_tail_pages_selector(self, base_pages, tail_pages, create_layout_func):
+        def evaluate_subset(subset, tested_tail_pages):
+            layout = create_layout_func(base_pages, tested_tail_pages, subset)
+            if layout and self.isPagesListUnique(layout, self.layouts):
+                self.last_layout_result = self.run_next_layout(layout)
+                return self.is_result_within_target_range(self.last_layout_result)
+            return True
+
+        result = []
+        def search(left, right):
+            if left >= right:
+                return
+
+            mid = (left + right) // 2
+            left_subset = tail_pages[left:mid]
+            right_subset = tail_pages[mid:right]
+
+            left_in_range = evaluate_subset(left_subset, result)
+            if left_in_range:
+                # If the left subset is under the threshold, add it to the result
+                result.extend(left_subset)
+            else:
+                search(left, mid)
+
+            right_in_range = evaluate_subset(right_subset, result)
+            if right_in_range:
+                # If the left subset is under the threshold, add it to the result
+                result.extend(right_subset)
+            else:
+                search(mid, right)
+
+            if left_in_range and right_in_range:
+                return
+
+        # Start the search with the entire list
+        search(0, len(tail_pages))
+        layout = create_layout_func(base_pages, result, [])
+        return result, layout
+
     def generate_layouts(self):
+        tail_pages = self.get_tail_pages()
+        
+        lo_layout = self.get_lowest_runtime_layout_in_range()
+        if lo_layout and self.isPagesListUnique(lo_layout, self.layouts):
+            self.last_layout_result = self.run_next_layout(lo_layout)
+        res, lo_base_layout = self.binary_search_tail_pages_selector(lo_layout, tail_pages, self.remove_tails_pages_func)
+        
+        hi_layout = self.get_highest_runtime_layout_in_range()
+        if hi_layout and self.isPagesListUnique(hi_layout, self.layouts):
+            self.last_layout_result = self.run_next_layout(hi_layout)
+        res, hi_base_layout = self.binary_search_tail_pages_selector(hi_layout, tail_pages, self.add_tails_pages_func)
+
+    def generate_layouts_v2(self):
         self.num_generated_layouts = 0
 
         tail_pages = []
@@ -877,121 +735,9 @@ class MosrangeSelector(Selector):
         self.generate_initial_layouts()
         self.find_desired_layout()
         self.generate_layouts()
+        self.generate_layouts_v2()
 
         self.logger.info('=================================================================')
         self.logger.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
         self.logger.info('=================================================================')
-
-
-    # def generate_layout_from_base(self, base_pages, search_space, coverage, sort=True):
-    #     self.logger.debug(f'generate_layout_from_base(): len(base_pages)={len(base_pages)} , len(search_space)={len(search_space)} , coverage={coverage}')
-    #     expected_coverage = coverage - self.pebsTlbCoverage(base_pages)
-    #     pebs_df = self.pebs_df.query(f'PAGE_NUMBER in {search_space} and PAGE_NUMBER not in {base_pages}')
-    #     if sort:
-    #         pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=False)
-    #     self.logger.debug(f'generate_layout_from_base() after filtering pages: len(pebs_df)={len(pebs_df)}')
-    #     layout = self.generate_layout_from_pebs(expected_coverage, pebs_df)
-    #     if layout:
-    #         return layout+base_pages
-    #     else:
-    #         return []
-
-    # def add_hugepages_to_base(self, next_coverage, base_pages, other_pages, all_pages):
-    #     other_even_pages = [p for p in other_pages if p%2==0]
-    #     all_even_pages = [p for p in all_pages if p%2==0]
-    #     search_space_options = [other_pages, all_pages, other_even_pages, all_even_pages]
-    #     for s in search_space_options:
-    #         layout = self.generate_layout_from_base(base_pages, s, next_coverage)
-    #         if layout and self.isPagesListUnique(layout, self.layouts):
-    #             return layout
-    #     return []
-
-    # def remove_hugepages_from_base(self, pebs_coverage, base_pages, pages_to_remove):
-    #     mem_layout = []
-    #     df = self.pebs_df.query(f'PAGE_NUMBER in {base_pages}')
-    #     df = df.sort_values('TLB_COVERAGE', ascending=False)
-    #     total_weight = df['TLB_COVERAGE'].sum()
-    #     # if the coverage of the base_pages less than expected,
-    #     # then we can not remove pages from it
-    #     if total_weight < (pebs_coverage - self.search_pebs_threshold):
-    #         return []
-    #     for index, row in df.iterrows():
-    #         page = row['PAGE_NUMBER']
-    #         if page not in pages_to_remove:
-    #             continue
-    #         weight = row['TLB_COVERAGE']
-    #         if (total_weight - weight) > (pebs_coverage - self.search_pebs_threshold):
-    #             mem_layout.append(page)
-    #             total_weight -= weight
-    #         if total_weight <= pebs_coverage:
-    #             break
-    #     # could not find subset to remove that leads to the required coverage
-    #     if total_weight > (pebs_coverage + self.search_pebs_threshold):
-    #         return []
-    #     if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-    #         return mem_layout
-    #     return []
-
-    # def constrained_layout_selection(self, pebs_coverage, include_pages, exclude_pages, sort_ascending=False):
-    #     pebs_df = self.pebs_df.query(f'PAGE_NUMBER not in {exclude_pages}')
-    #     pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=sort_ascending)
-    #     search_space = pebs_df['PAGE_NUMBER'].to_list()
-    #     layout = self.generate_layout_from_base(include_pages, search_space, pebs_coverage)
-    #     return layout
-
-    # def scaleExpectedCoverage(self, layout_res, base_layout):
-    #     pebs_coverage = self.pebsTlbCoverage(layout_res['hugepages'])
-    #     real_coverage = self.realMetricCoverage(layout_res)
-    #     base_pebs = self.pebsTlbCoverage(base_layout)
-    #     base_res = self.find_layout_results(base_layout)
-    #     base_real = self.realMetricCoverage(base_res)
-    #     pebs_delta = pebs_coverage - base_pebs
-    #     real_gap = real_coverage - base_real
-
-    #     if real_gap <= 0:
-    #         desired_coverage = min(100, base_pebs + pebs_delta * 2)
-    #         base_layout = layout_res['hugepages']
-    #         return desired_coverage, base_layout
-    #     return None, None
-
-    # def layoutComposedOfHeadPages(self, layout):
-    #     layout_coverage = self.pebsTlbCoverage(layout)
-    #     layout_pages = self.pebs_df.query(f'PAGE_NUMBER in {layout}')
-    #     layout_pages = layout_pages.sort_values('TLB_COVERAGE', ascending=False).head(10)
-    #     headpages_coverage = layout_pages['TLB_COVERAGE'].sum()
-    #     return headpages_coverage >= (layout_coverage/2)
-
-    # def realToPebsCoverage(self, layout_res, layout_expected_real):
-    #     layout = layout_res['hugepages']
-    #     layout_pebs = self.pebsTlbCoverage(layout)
-    #     layout_real = self.realMetricCoverage(layout_res)
-
-    #     if self.layoutComposedOfHeadPages(layout):
-    #         scaled_desired_coverage = layout_expected_real - layout_real + layout_pebs
-    #         return scaled_desired_coverage
-
-    #     # prevent division by zero and getting numerous ratio in
-    #     # the calculation of expected_to_real
-    #     layout_real = max(1, layout_real)
-    #     expected_to_real = layout_expected_real / layout_real
-    #     scaled_desired_coverage = layout_pebs * expected_to_real
-    #     return scaled_desired_coverage
-
-    # def select_next_layout_v2(self):
-    #     lower_layout, upper_layout = self.get_surrounding_layouts(self.results_df)
-
-    #     base_layout = upper_layout
-    #     next_coverage = self.metric_coverage
-    #     layout = None
-    #     while not layout:
-    #         A, B, C, U = self.split_pages_to_working_sets(upper_layout, lower_layout)
-    #         layout = self.generate_layout_from_base(base_layout, C, next_coverage)
-    #         if layout and self.isPagesListUnique(layout, self.layouts):
-    #             layout_res = self.run_next_layout(layout)
-    #         else:
-    #             break
-    #         next_coverage, base_layout = self.scaleExpectedCoverage(layout_res, base_layout)
-    #         if base_layout is None:
-    #             next_coverage = self.realToPebsCoverage(self, layout_res, self.metric_coverage)
-    #             base_layout = upper_layout
-
+        MosrangeSelector.pause()
