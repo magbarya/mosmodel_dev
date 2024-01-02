@@ -600,22 +600,27 @@ class MosrangeSelector(Selector):
             # try to select layout that yields a data point at the desired metric_val
             for idx in range(len(all_pairs_df)):
                 pair = all_pairs_df.iloc[idx]
-                lo_layout = pair['hugepages_lo']
-                hi_layout = pair['hugepages_hi']
-
-                # # 1st selection method by merging surrounding layouts of the desired metric_val
-                # if self.combine_layout_and_test_in_range(lo_layout, hi_layout, pebs_df):
-                #     return True
-
                 hi_layout_name = pair['layout_hi']
                 if hi_layout_name == last_hi_layout_name:
                     continue
                 last_hi_layout_name = hi_layout_name
-                # 2nd selection method by expanding layouts with lower values
+                # 1st selection method by expanding layouts with lower values
+                hi_layout = pair['hugepages_hi']
                 hi_real_coverage = self.realCoverage(pair[f'{self.metric_name}_hi'], self.metric_name)
                 if self.select_desired_layout(hi_layout, hi_real_coverage, pebs_df):
+                    break
+            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            # try to select layout that yields a data point at the desired metric_val
+            for idx in range(len(all_pairs_df)):
+                pair = all_pairs_df.iloc[idx]
+                lo_layout = pair['hugepages_lo']
+                hi_layout = pair['hugepages_hi']
+                # 2nd selection method by merging surrounding layouts of the desired metric_val
+                self.combine_layout_and_test_in_range(lo_layout, hi_layout, pebs_df)
+                if self.is_result_within_target_range(self.last_layout_result) and self.num_generated_layouts >= (self.num_layouts // 2):
                     return True
-
+            if self.is_result_within_target_range(self.last_layout_result):
+                return True
 
     def get_tail_pages(self, threshold=0.01, total_threshold=2):
         tail_pages_df = self.pebs_df.query(f'TLB_COVERAGE < {threshold}')
@@ -684,16 +689,12 @@ class MosrangeSelector(Selector):
 
     def generate_layouts(self):
         tail_pages = self.get_tail_pages()
-
-        lo_layout = self.get_lowest_runtime_layout_in_range()
-        if lo_layout and self.isPagesListUnique(lo_layout, self.layouts):
-            self.last_layout_result = self.run_next_layout(lo_layout)
-        res, lo_base_layout = self.binary_search_tail_pages_selector(lo_layout, tail_pages, self.remove_tails_pages_func)
-
-        hi_layout = self.get_highest_runtime_layout_in_range()
-        if hi_layout and self.isPagesListUnique(hi_layout, self.layouts):
-            self.last_layout_result = self.run_next_layout(hi_layout)
-        res, hi_base_layout = self.binary_search_tail_pages_selector(hi_layout, tail_pages, self.add_tails_pages_func)
+        range_layouts_df = self.get_layounts_within_target_range()
+        for index, row in range_layouts_df.iterrows():
+            layout = row['hugepages']
+            self.last_layout_result = self.run_next_layout(layout)
+            res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.remove_tails_pages_func)
+            res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.add_tails_pages_func)
 
     def generate_layouts_v2(self):
         self.num_generated_layouts = 0
