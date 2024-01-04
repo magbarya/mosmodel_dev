@@ -26,11 +26,13 @@ class MosrangeSelector(Selector):
                  metric_name,
                  metric_val,
                  metric_coverage,
-                 range_epsilon=0.01) -> None:
+                 range_epsilon=0.01,
+                 absolute_range_epsilon=False) -> None:
         self.num_generated_layouts = 0
         self.metric_val = metric_val
         self.metric_coverage = metric_coverage
         self.range_epsilon = range_epsilon
+        self.absolute_range_epsilon = absolute_range_epsilon
         self.search_pebs_threshold = 0.5
         self.last_lo_layout = None
         self.last_hi_layout = None
@@ -299,7 +301,7 @@ class MosrangeSelector(Selector):
         diff_ratio = diff / self.metric_val
         return diff_ratio < 0.01
 
-    def is_result_within_target_range(self, layout_res):
+    def is_result_within_target_abs_range(self, layout_res):
         if layout_res is None:
             return False
         min_val = self.metric_val * (1 - self.range_epsilon)
@@ -307,11 +309,39 @@ class MosrangeSelector(Selector):
         val = layout_res[self.metric_name]
         return min_val <= val <= max_val
 
-    def get_layounts_within_target_range(self):
+    def is_result_within_target_rel_range(self, layout_res):
+        if layout_res is None:
+            return False
+        epsilon = self.range_epsilon * 100
+        min_coverage = self.metric_coverage - epsilon
+        max_coverage = self.metric_coverage + epsilon
+        layout_coverage = self.realMetricCoverage(layout_res, self.metric_name)
+        return min_coverage <= layout_coverage <= max_coverage
+
+    def is_result_within_target_range(self, layout_res):
+        if self.absolute_range_epsilon:
+            return self.is_result_within_target_abs_range(layout_res)
+        return self.is_result_within_target_rel_range(layout_res)
+
+    def get_layounts_within_target_abs_range(self):
         min_val = self.metric_val * (1 - self.range_epsilon)
         max_val = self.metric_val * (1 + self.range_epsilon)
         res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
         return res
+
+    def get_layounts_within_target_rel_range(self):
+        epsilon = self.range_epsilon * 100
+        min_coverage = max(0, self.metric_coverage - epsilon) / 100
+        max_coverage = min(100, self.metric_coverage + epsilon) / 100
+        min_val = self.metric_max_val - (min_coverage * self.metric_range_delta)
+        max_val = self.metric_max_val - (max_coverage * self.metric_range_delta)
+        res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
+        return res
+
+    def get_layounts_within_target_range(self):
+        if self.absolute_range_epsilon:
+            return self.get_layounts_within_target_abs_range()
+        return self.get_layounts_within_target_rel_range()
 
     def get_highest_runtime_layout_in_range(self):
         range_layouts = self.get_layounts_within_target_range()
