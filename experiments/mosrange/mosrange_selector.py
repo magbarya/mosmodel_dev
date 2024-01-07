@@ -718,6 +718,7 @@ class MosrangeSelector(Selector):
         return result, layout
 
     def generate_layouts(self):
+        self.num_generated_layouts = 0
         tail_pages = self.get_tail_pages()
         range_layouts_df = self.get_layounts_within_target_range()
         for index, row in range_layouts_df.iterrows():
@@ -725,6 +726,8 @@ class MosrangeSelector(Selector):
             self.last_layout_result = self.run_next_layout(layout)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.remove_tails_pages_func)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.add_tails_pages_func)
+            if self.num_generated_layouts >= 50:
+                break
 
     def generate_layouts_v2(self):
         self.num_generated_layouts = 0
@@ -759,6 +762,8 @@ class MosrangeSelector(Selector):
                         tail_pages += g
                         continue
                 skipped_layouts.append(g)
+                if self.num_generated_layouts >= 50:
+                    break
 
     def run(self):
         self.log_metadata()
