@@ -304,6 +304,7 @@ class Selector:
         missing_pages = list(set(self.all_2mb_layout) - set(pebs_pages))
         #self.total_misses
         all_pebs_real_coverage = self.realMetricCoverage(self.all_pebs_r, 'stlb_misses')
+        all_pebs_real_coverage = min(100, all_pebs_real_coverage) # in case all_pebs layout is a little bit better than all_2mb layout
         # normalize pages recorded by pebs based on their real coverage
         ratio = all_pebs_real_coverage / 100
         pebs_df['TLB_COVERAGE'] *= ratio
