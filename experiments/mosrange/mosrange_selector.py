@@ -331,10 +331,9 @@ class MosrangeSelector(Selector):
 
     def get_layounts_within_target_rel_range(self):
         epsilon = self.range_epsilon * 100
-        min_coverage = max(0, self.metric_coverage - epsilon) / 100
-        max_coverage = min(100, self.metric_coverage + epsilon) / 100
-        min_val = self.metric_max_val - (min_coverage * self.metric_range_delta)
-        max_val = self.metric_max_val - (max_coverage * self.metric_range_delta)
+        rel_range_delta = epsilon * self.metric_range_delta
+        min_val = self.metric_val - rel_range_delta
+        max_val = self.metric_val + rel_range_delta
         res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
         return res
 
