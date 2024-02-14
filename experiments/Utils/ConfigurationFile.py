@@ -58,11 +58,11 @@ class Configuration:
                 row[Configuration.END_OFFSET] = end_offset
                 start_offset = curr_start_offset
                 end_offset = curr_end_offset
-                windows = pd.concat([windows, row])
+                windows = pd.concat([windows, row.to_frame().T], ignore_index=True)
         if start_offset != -1:
             row[Configuration.START_OFFSET] = start_offset
             row[Configuration.END_OFFSET] = end_offset
-            windows = pd.concat([windows, row])
+            windows = pd.concat([windows, row.to_frame().T], ignore_index=True)
         return windows
 
 
