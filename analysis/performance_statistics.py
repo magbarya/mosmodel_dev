@@ -51,6 +51,9 @@ class PerformanceStatistics:
             raise Exception('the data-set has no performance counters for STLB hits!')
 
     def getStlbMisses(self, index=None):
+        return self.getStlbMisses_completed(index)
+
+    def getStlbMisses_started(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.miss_causes_a_walk' in self._df.columns \
                 and 'dtlb_store_misses.miss_causes_a_walk' in self._df.columns:
@@ -59,8 +62,7 @@ class PerformanceStatistics:
         else:
             raise Exception('the data-set has no performance counters for TLB misses!')
 
-    '''
-    def getStlbMisses(self, index=None):
+    def getStlbMisses_completed(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.walk_completed' in self._df.columns \
         and 'dtlb_store_misses.walk_completed' in self._df.columns:
@@ -68,9 +70,8 @@ class PerformanceStatistics:
                     + data_set['dtlb_store_misses.walk_completed']
         else:
             raise Exception('the data-set has no performance counters for STLB misses (dtlb-misses-walk-completed)!')
-    '''
 
-    def getStlbMisses2m(self, index=None):
+    def getStlbMisses2m_completed(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.walk_completed_2m_4m' in self._df.columns \
         and 'dtlb_store_misses.walk_completed_2m_4m' in self._df.columns:
@@ -80,7 +81,7 @@ class PerformanceStatistics:
             return self.getStlbMisses(index)
             #raise Exception('the data-set has no performance counters for STLB misses (for 2MB pages)!')
 
-    def getStlbMisses4k(self, index=None):
+    def getStlbMisses4k_completed(self, index=None):
         data_set = self.__getDataSet(index)
         if 'dtlb_load_misses.walk_completed_4k' in self._df.columns \
         and 'dtlb_store_misses.walk_completed_4k' in self._df.columns:

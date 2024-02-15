@@ -58,11 +58,11 @@ class Configuration:
                 row[Configuration.END_OFFSET] = end_offset
                 start_offset = curr_start_offset
                 end_offset = curr_end_offset
-                windows = windows.append(row)
+                windows = pd.concat([windows, row.to_frame().T], ignore_index=True)
         if start_offset != -1:
             row[Configuration.START_OFFSET] = start_offset
             row[Configuration.END_OFFSET] = end_offset
-            windows = windows.append(row)
+            windows = pd.concat([windows, row.to_frame().T], ignore_index=True)
         return windows
 
 
@@ -72,11 +72,10 @@ class Configuration:
         df = df[[Configuration.TYPE, Configuration.PAGE_SIZE,
                  Configuration.START_OFFSET, Configuration.END_OFFSET]]
         windows = df[df[Configuration.PAGE_SIZE] == Configuration.POOL_SIZE_FLAG]
-        windows = windows.append(Configuration.mergeAdjacentWindows(df, Configuration.TYPE_BRK, Configuration.HUGE_2MB_PAGE_SIZE))
-        windows = windows.append(Configuration.mergeAdjacentWindows(df, Configuration.TYPE_BRK, Configuration.HUGE_1GB_PAGE_SIZE))
-        #windows = windows.append(Configuration.mergeAdjacentWindows(df, Configuration.TYPE_MMAP, Configuration.HUGE_2MB_PAGE_SIZE))
-        #windows = windows.append(Configuration.mergeAdjacentWindows(df, Configuration.TYPE_MMAP, Configuration.HUGE_1GB_PAGE_SIZE))
-        #df = pd.DataFrame(windows, index=None)
+        brk_2mb_window = Configuration.mergeAdjacentWindows(df, Configuration.TYPE_BRK, Configuration.HUGE_2MB_PAGE_SIZE)
+        windows = pd.concat([windows, brk_2mb_window])
+        brk_1gb_window = Configuration.mergeAdjacentWindows(df, Configuration.TYPE_BRK, Configuration.HUGE_1GB_PAGE_SIZE)
+        windows = pd.concat([windows, brk_1gb_window])
         path = os.path.join(abs_path, Configuration.LAYOUT_DIRECTORY)
         if not os.path.exists(path):
             os.makedirs(path, exist_ok=True)
