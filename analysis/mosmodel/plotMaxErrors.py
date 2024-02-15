@@ -15,7 +15,7 @@ def plotModels(df, models, output):
     for m in models:
         max_error = df[m + error_suffix].abs().max() * 100
         new_row = pd.Series({'model': m, 'max-error': max_error})
-        max_errors_df = pd.concat([max_errors_df, new_row], ignore_index=True)
+        max_errors_df = pd.concat([max_errors_df, new_row.to_frame().T], ignore_index=True)
 
     csv_output = output.replace('.pdf', '.csv')
     if csv_output == output:
