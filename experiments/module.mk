@@ -52,7 +52,14 @@ endef
 
 #### recipes and rules for prerequisites
 
-.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool
+.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool perf_events
+
+# create perf_events_list file if it does not exist
+PERF_EVENTS_LIST_FILE := $(SCRIPTS_ROOT_DIR)/perf_events_list.txt
+CREATE_PEF_EVENTS_SCRIPT := $(SCRIPTS_ROOT_DIR)/create_perf_events_list.sh
+perf_events: $(PERF_EVENTS_LIST_FILE)
+$(PERF_EVENTS_LIST_FILE):
+	$(CREATE_PEF_EVENTS_SCRIPT)
 
 mosalloc: $(MOSALLOC_TOOL)
 $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
@@ -68,7 +75,7 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl mosalloc
+experiments-prerequisites: perf numactl mosalloc perf_events
 
 PERF_PACKAGES := linux-tools
 KERNEL_VERSION := $(shell uname -r)
