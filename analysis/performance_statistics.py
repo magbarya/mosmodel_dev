@@ -29,10 +29,40 @@ class PerformanceStatistics:
         else:
             return None
 
+    def __getLoadStoreCountersSum(self, index, load_counter, store_counter):
+        data_set = self.__getDataSet(index)
+        if load_counter in self._df.columns \
+                and store_counter in self._df.columns:
+                    return data_set[load_counter] + data_set[store_counter]
+        else:
+            return None
+
+    def __getCounter(self, index, counter):
+        data_set = self.__getDataSet(index)
+        if counter in self._df.columns:
+            return data_set[counter]
+        else:
+            return None
+
     def getIndexColumn(self):
         return np.array(self._df.index)
 
+    def getWalkPendingCycles(self, index=None):
+        walk_cycles = self.__getWalkCounter(index, 'pending')
+        if walk_cycles is not None:
+            return walk_cycles
+        raise Exception('the data-set has no performance counters for walk pending!')
+
+    def getWalkActiveCycles(self, index=None):
+        walk_cycles = self.__getWalkCounter(index, 'active')
+        if walk_cycles is not None:
+            return walk_cycles
+        raise Exception('the data-set has no performance counters for walk active!')
+
     def getWalkDuration(self, index=None):
+        walk_duration = self.__getWalkCounter(index, 'pending')
+        if walk_duration is not None:
+            return walk_duration
         walk_duration = self.__getWalkCounter(index, 'active')
         if walk_duration is not None:
             return walk_duration
@@ -42,11 +72,11 @@ class PerformanceStatistics:
         raise Exception('the data-set has no performance counters for page walks!')
 
     def getStlbHits(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'dtlb_load_misses.stlb_hit' in self._df.columns \
-                and 'dtlb_store_misses.stlb_hit' in self._df.columns:
-                    return data_set['dtlb_load_misses.stlb_hit'] \
-                            + data_set['dtlb_store_misses.stlb_hit']
+        load_counter = 'dtlb_load_misses.stlb_hit'
+        store_counter = 'dtlb_store_misses.stlb_hit'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for STLB hits!')
 
@@ -54,39 +84,39 @@ class PerformanceStatistics:
         return self.getStlbMisses_completed(index)
 
     def getStlbMisses_started(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'dtlb_load_misses.miss_causes_a_walk' in self._df.columns \
-                and 'dtlb_store_misses.miss_causes_a_walk' in self._df.columns:
-                    return data_set['dtlb_load_misses.miss_causes_a_walk'] \
-                            + data_set['dtlb_store_misses.miss_causes_a_walk']
+        load_counter = 'dtlb_load_misses.miss_causes_a_walk'
+        store_counter = 'dtlb_store_misses.miss_causes_a_walk'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for TLB misses!')
 
     def getStlbMisses_completed(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'dtlb_load_misses.walk_completed' in self._df.columns \
-        and 'dtlb_store_misses.walk_completed' in self._df.columns:
-            return data_set['dtlb_load_misses.walk_completed'] \
-                    + data_set['dtlb_store_misses.walk_completed']
+        load_counter = 'dtlb_load_misses.walk_completed'
+        store_counter = 'dtlb_store_misses.walk_completed'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for STLB misses (dtlb-misses-walk-completed)!')
 
     def getStlbMisses2m_completed(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'dtlb_load_misses.walk_completed_2m_4m' in self._df.columns \
-        and 'dtlb_store_misses.walk_completed_2m_4m' in self._df.columns:
-            return data_set['dtlb_load_misses.walk_completed_2m_4m'] \
-                    + data_set['dtlb_store_misses.walk_completed_2m_4m']
+        load_counter = 'dtlb_load_misses.walk_completed_2m_4m'
+        store_counter = 'dtlb_store_misses.walk_completed_2m_4m'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             return self.getStlbMisses(index)
             #raise Exception('the data-set has no performance counters for STLB misses (for 2MB pages)!')
 
     def getStlbMisses4k_completed(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'dtlb_load_misses.walk_completed_4k' in self._df.columns \
-        and 'dtlb_store_misses.walk_completed_4k' in self._df.columns:
-            return data_set['dtlb_load_misses.walk_completed_4k'] \
-                    + data_set['dtlb_store_misses.walk_completed_4k']
+        load_counter = 'dtlb_load_misses.walk_completed_4k'
+        store_counter = 'dtlb_store_misses.walk_completed_4k'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             return self.getStlbMisses(index)
             #raise Exception('the data-set has no performance counters for STLB misses (for 4KB pages)!')
@@ -104,57 +134,76 @@ class PerformanceStatistics:
         return self.getTlbAccesses(index) - self.getTlbMisses(index)
 
     def getL1Accesses(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'L1-dcache-loads' in self._df.columns \
-                and 'L1-dcache-stores' in self._df.columns:
-                    return data_set['L1-dcache-loads'] \
-                            + data_set['L1-dcache-stores']
+        load_counter = 'L1-dcache-loads'
+        store_counter = 'L1-dcache-stores'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for L1 data cache accesses!')
 
     def getL1Misses(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'L1-dcache-load-misses' in self._df.columns \
-                and 'L1-dcache-store-misses' in self._df.columns:
-                    return data_set['L1-dcache-load-misses'] \
-                            + data_set['L1-dcache-store-misses']
+        val = self.__getLoadStoreCountersSum(index, 'L1-dcache-load-misses', 'L1-dcache-store-misses')
+        if val is not None:
+            return val
+        val = self.__getCounter(index, 'mem_load_retired.l1_miss')
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for L1 data cache misses!')
 
     def getL1Hits(self, index=None):
+        val = self.__getLoadStoreCountersSum(index, 'L1-dcache-load-hits', 'L1-dcache-store-hits')
+        if val is not None:
+            return val
+        val = self.__getCounter(index, 'mem_load_retired.l1_hit')
+        if val is not None:
+            return val
         misses = self.getL1Misses(index)
         accesses = self.getL1Accesses(index)
         hits = accesses - misses
         return hits
 
     def getLlcAccesses(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'LLC-loads' in self._df.columns \
-                and 'LLC-stores' in self._df.columns:
-                    return data_set['LLC-loads'] \
-                            + data_set['LLC-stores']
+        load_counter = 'LLC-loads'
+        store_counter = 'LLC-stores'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for LLC accesses!')
 
     def getLlcMisses(self, index=None):
-        data_set = self.__getDataSet(index)
-        if 'LLC-load-misses' in self._df.columns\
-                and 'LLC-store-misses' in self._df.columns:
-                    return data_set['LLC-load-misses'] \
-                            + data_set['LLC-store-misses']
+        load_counter = 'LLC-load-misses'
+        store_counter = 'LLC-store-misses'
+        val = self.__getLoadStoreCountersSum(index, load_counter, store_counter)
+        if val is not None:
+            return val
+        val = self.__getCounter(index, 'mem_load_retired.l3_miss')
+        if val is not None:
+            return val
         else:
             raise Exception('the data-set has no performance counters for LLC misses!')
 
     def getLlcHits(self, index=None):
+        val = self.__getCounter(index, 'mem_load_retired.l3_hit')
+        if val is not None:
+            return val
         return self.getLlcAccesses(index) - self.getLlcMisses(index)
 
     def getL2Accesses(self, index=None):
         return self.getL1Misses(index)
 
     def getL2Misses(self, index=None):
+        val = self.__getCounter(index, 'mem_load_retired.l2_miss')
+        if val is not None:
+            return val
         return self.getLlcAccesses(index)
 
     def getL2Hits(self, index=None):
+        val = self.__getCounter(index, 'mem_load_retired.l2_hit')
+        if val is not None:
+            return val
         return self.getL2Accesses(index) - self.getL2Misses(index)
 
     def getPageWalkerL1Hits(self, index=None):
