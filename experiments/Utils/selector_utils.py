@@ -462,9 +462,11 @@ class Selector:
         return last_result
 
     def run_layouts(self, layouts):
-        results_df = pd.DataFrame()
+        results_df = None
         for l in layouts:
             r = self.run_next_layout(l)
-            results_df = results_df.append(r)
+            if results_df is None:
+                results_df = pd.DataFrame(columns=r.columns)
+            results_df.loc[len(results_df)] = r
         return results_df
 
