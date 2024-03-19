@@ -462,7 +462,7 @@ class Selector:
         return last_result
 
     def run_layouts(self, layouts):
-        results_df = pd.DataFrame()
+        results_df = None
         for l in layouts:
             r = self.run_next_layout(l)
             results_df = pd.concat([results_df, pd.DataFrame(r)], ignore_index=True)
