@@ -15,7 +15,7 @@ analysis_root_dir = os.path.join(experiments_root_dir, '../analysis')
 sys.path.append(analysis_root_dir)
 from performance_statistics import PerformanceStatistics
 
-# TODO: go over all files that import Utils and modify them to use 
+# TODO: go over all files that import Utils and modify them to use
 # the Utils class
 kb = 1024
 mb = 1024*kb
@@ -34,16 +34,16 @@ class Utils:
     KB = 1024
     MB = 1024*kb
     GB = 1024*mb
-    
+
     def round_up(x, base):
         return int(base * math.ceil(x/base))
-    
+
     def round_down(x, base):
         return (int(x / base) * base)
-    
+
     def isPowerOfTwo(number):
         return (number != 0) and ((number & (number - 1)) == 0)
-    
+
     def load_dataframe(perf_file, sort=False, drop_duplicates=True, shuffle=False):
         if type(perf_file) is str:
             df = pd.read_csv(perf_file)
@@ -51,11 +51,13 @@ class Utils:
             df = perf_file
         else:
             assert False
-            
+
         if 'walk_cycles' not in df.columns:
             ps = PerformanceStatistics(perf_file)
             df = ps.getDataFrame().reset_index()
             df['walk_cycles'] = ps.getWalkDuration()
+            df['walk_active'] = ps.getWalkActive()
+            df['walk_pending'] = ps.getWalkPending()
             df['cpu_cycles'] = ps.getRuntime()
             df['stlb_misses'] = ps.getStlbMisses()
             df['stlb_hits'] = ps.getStlbHits()
@@ -104,11 +106,11 @@ class Utils:
         total_access = pebs_df['NUM_ACCESSES'].sum()
         pebs_df['TLB_COVERAGE'] = pebs_df['NUM_ACCESSES'].mul(100).divide(total_access)
         pebs_df = pebs_df.sort_values('TLB_COVERAGE', ascending=False)
-        
+
         pebs_df = pebs_df.reset_index()
-        
+
         return pebs_df
-    
+
     def load_layout_hugepages(layout_name, exp_dir):
         hugepage_size = 1 << 21
         base_page_size = 1 << 12
@@ -127,7 +129,7 @@ class Utils:
             pages += list(range(start_page, end_page))
         start_offset = offset / base_page_size
         return pages
-    
+
     def write_layout(layout, pages, output, brk_footprint, mmap_footprint, sliding_index=0):
         hugepage_size= 1 << 21
         base_page_size = 1 << 12
@@ -155,9 +157,9 @@ class Utils:
             suffix = 'M'
         else:
             suffix = suffix.capitalize()
-            
+
         return f'{num_str} {suffix}'
-    
+
     def get_large_number_format_suffix(num):
         suffix = ''
         factor = 1
@@ -168,7 +170,7 @@ class Utils:
             factor = 1e9
             suffix = 'billions'
         return factor, suffix
-    
+
     def get_format_suffix_for_large_number(dataframes, metric):
         max_val = 0
         min_val = None
@@ -215,7 +217,7 @@ class Utils:
         if '/' in benchmark_name and '.' in benchmark_name:
             benchmark_name = benchmark_name[:benchmark_name.find('/')+1] + benchmark_name[benchmark_name.find('.')+1:]
         return benchmark_name
-    
+
     def shortenBenchmarkNameToMinimal(benchmark_name):
         benchmark_name = Utils.shortenBenchmarkName(benchmark_name)
         benchmark_name = benchmark_name.replace('gapbs/', '')
@@ -272,7 +274,7 @@ class DeltaXCalculator:
     def calculate_max_deltaX(df):
         max_deltaX = df['deltaX'].max()
         return max_deltaX
-    
+
     def calculate_missing_samples(df):
         df = df.copy()
         df['missing_samples'] = df['deltaX'] // DeltaXCalculator.DELTA_X_THRESHOLD
@@ -290,7 +292,7 @@ class DeltaXCalculator:
         df = df.sort_values('deltaX', ascending=False)
         deltaX = df['deltaX']
         return deltaX.iloc[0], deltaX.iloc[1], deltaX.iloc[2]
-    
+
     def get_largest_three_deltaX(perf_file, metric='walk_cycles'):
         df = DeltaXCalculator.calculate_deltaX(perf_file, metric)
         df = df.sort_values('deltaX', ascending=False)

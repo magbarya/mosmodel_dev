@@ -32,6 +32,12 @@ class PerformanceStatistics:
     def getIndexColumn(self):
         return np.array(self._df.index)
 
+    def getWalkPending(self, index=None):
+        return self.__getWalkCounter(index, 'pending')
+
+    def getWalkActive(self, index=None):
+        return self.__getWalkCounter(index, 'active')
+
     def getWalkDuration(self, index=None):
         walk_duration = self.__getWalkCounter(index, 'active')
         if walk_duration is not None:
