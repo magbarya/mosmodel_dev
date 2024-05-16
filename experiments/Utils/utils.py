@@ -55,13 +55,25 @@ class Utils:
         if 'walk_cycles' not in df.columns:
             ps = PerformanceStatistics(perf_file)
             df = ps.getDataFrame().reset_index()
-            df['walk_cycles'] = ps.getWalkDuration()
-            df['walk_active'] = ps.getWalkActive()
-            df['walk_pending'] = ps.getWalkPending()
             df['cpu_cycles'] = ps.getRuntime()
             df['stlb_misses'] = ps.getStlbMisses()
             df['stlb_hits'] = ps.getStlbHits()
-            df = df[['layout', 'walk_cycles', 'stlb_misses', 'stlb_hits', 'cpu_cycles']]
+
+            walk_cycles = ps.getWalkDuration()
+            df['walk_cycles'] = walk_cycles
+
+            walk_active = ps.getWalkActive()
+            if walk_active is not None:
+                df['walk_active'] = walk_active
+            else:
+                df['walk_active'] = walk_cycles
+            walk_pending = ps.getWalkPending()
+            if walk_pending is not None:
+                df['walk_pending'] = walk_pending
+            else:
+                df['walk_pending'] = walk_cycles
+
+            df = df[['layout', 'walk_cycles', 'stlb_misses', 'stlb_hits', 'cpu_cycles', 'walk_active', 'walk_pending']]
 
         if sort:
             df = df.sort_values('cpu_cycles').reset_index(drop=True)
