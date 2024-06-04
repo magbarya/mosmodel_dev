@@ -465,6 +465,6 @@ class Selector:
         results_df = pd.DataFrame()
         for l in layouts:
             r = self.run_next_layout(l)
-            results_df = results_df.append(r)
+            results_df = pd.concat([results_df, r], ignore_index=True)
         return results_df
 

@@ -716,7 +716,7 @@ class MosrangeSelector(Selector):
         layout = create_layout_func(base_pages, result, [])
         return result, layout
 
-    def generate_layouts(self):
+    def generate_layouts(self, max_num_layouts=50):
         self.num_generated_layouts = 0
         tail_pages = self.get_tail_pages()
         range_layouts_df = self.get_layounts_within_target_range()
@@ -725,10 +725,10 @@ class MosrangeSelector(Selector):
             self.last_layout_result = self.run_next_layout(layout)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.remove_tails_pages_func)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.add_tails_pages_func)
-            if self.num_generated_layouts >= 50:
+            if self.num_generated_layouts >= max_num_layouts:
                 break
 
-    def generate_layouts_v2(self):
+    def generate_layouts_v2(self, max_num_layouts=50):
         self.num_generated_layouts = 0
 
         tail_pages = []
@@ -761,7 +761,7 @@ class MosrangeSelector(Selector):
                         tail_pages += g
                         continue
                 skipped_layouts.append(g)
-                if self.num_generated_layouts >= 50:
+                if self.num_generated_layouts >= max_num_layouts:
                     break
 
     def run(self):
@@ -769,8 +769,13 @@ class MosrangeSelector(Selector):
 
         self.generate_initial_layouts()
         self.find_desired_layout()
-        self.generate_layouts()
-        self.generate_layouts_v2()
+        while True:
+            rem_layouts = (self.num_layouts - self.last_layout_num) // 2
+            rem_layouts = max(rem_layouts, 25)
+            self.generate_layouts(rem_layouts)
+            self.generate_layouts_v2(rem_layouts)
+            if self.last_layout_num > self.num_layouts:
+                break
 
         self.logger.info('=================================================================')
         self.logger.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
