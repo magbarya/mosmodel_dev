@@ -659,11 +659,16 @@ class MosrangeSelector(Selector):
         tail_pages = tail_pages_df['PAGE_NUMBER'].to_list()
         return tail_pages
 
-    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2):
+    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2, max_num_layouts=20):
         tail_pages = self.get_tail_pages(threshold, total_threshold)
         num_tail_pages = len(tail_pages)
-        assert num_tail_pages > self.num_layouts
-        num_groups = self.num_layouts
+        if num_tail_pages == 0:
+            return None
+        # assert num_tail_pages > self.num_layouts
+        num_groups = max_num_layouts
+        if num_groups > num_tail_pages:
+            num_groups = num_tail_pages // 2
+        num_groups = max(1, num_groups)
         group_size = num_tail_pages // num_groups
         groups = [tail_pages[i : i+group_size] for i in range(0, num_tail_pages, group_size)]
 
@@ -733,7 +738,9 @@ class MosrangeSelector(Selector):
 
         tail_pages = []
         skipped_layouts = []
-        groups = self.get_tail_pages_groups()
+        groups = self.get_tail_pages_groups(max_num_layouts)
+        if groups is None:
+            return
         for g in groups:
             hi_layout = self.get_highest_runtime_layout_in_range()
             layout = list(set(hi_layout + tail_pages + g))
