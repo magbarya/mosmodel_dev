@@ -659,11 +659,16 @@ class MosrangeSelector(Selector):
         tail_pages = tail_pages_df['PAGE_NUMBER'].to_list()
         return tail_pages
 
-    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2):
+    def get_tail_pages_groups(self, threshold=0.01, total_threshold=2, max_num_layouts=20):
         tail_pages = self.get_tail_pages(threshold, total_threshold)
         num_tail_pages = len(tail_pages)
-        assert num_tail_pages > self.num_layouts
-        num_groups = self.num_layouts
+        if num_tail_pages == 0:
+            return None
+        # assert num_tail_pages > self.num_layouts
+        num_groups = max_num_layouts
+        if num_groups > num_tail_pages:
+            num_groups = num_tail_pages // 2
+        num_groups = max(1, num_groups)
         group_size = num_tail_pages // num_groups
         groups = [tail_pages[i : i+group_size] for i in range(0, num_tail_pages, group_size)]
 
@@ -716,7 +721,7 @@ class MosrangeSelector(Selector):
         layout = create_layout_func(base_pages, result, [])
         return result, layout
 
-    def generate_layouts(self):
+    def generate_layouts(self, max_num_layouts=50):
         self.num_generated_layouts = 0
         tail_pages = self.get_tail_pages()
         range_layouts_df = self.get_layounts_within_target_range()
@@ -725,15 +730,17 @@ class MosrangeSelector(Selector):
             self.last_layout_result = self.run_next_layout(layout)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.remove_tails_pages_func)
             res, base_layout = self.binary_search_tail_pages_selector(layout, tail_pages, self.add_tails_pages_func)
-            if self.num_generated_layouts >= 50:
+            if self.num_generated_layouts >= max_num_layouts:
                 break
 
-    def generate_layouts_v2(self):
+    def generate_layouts_v2(self, max_num_layouts=50):
         self.num_generated_layouts = 0
 
         tail_pages = []
         skipped_layouts = []
-        groups = self.get_tail_pages_groups()
+        groups = self.get_tail_pages_groups(max_num_layouts)
+        if groups is None:
+            return
         for g in groups:
             hi_layout = self.get_highest_runtime_layout_in_range()
             layout = list(set(hi_layout + tail_pages + g))
@@ -761,7 +768,7 @@ class MosrangeSelector(Selector):
                         tail_pages += g
                         continue
                 skipped_layouts.append(g)
-                if self.num_generated_layouts >= 50:
+                if self.num_generated_layouts >= max_num_layouts:
                     break
 
     def run(self):
@@ -769,8 +776,13 @@ class MosrangeSelector(Selector):
 
         self.generate_initial_layouts()
         self.find_desired_layout()
-        self.generate_layouts()
-        self.generate_layouts_v2()
+        while True:
+            rem_layouts = (self.num_layouts - self.last_layout_num) // 2
+            rem_layouts = max(rem_layouts, 25)
+            self.generate_layouts(rem_layouts)
+            self.generate_layouts_v2(rem_layouts)
+            if self.last_layout_num > self.num_layouts:
+                break
 
         self.logger.info('=================================================================')
         self.logger.info(f'Finished running MosRange process for:\n{self.exp_root_dir}')
