@@ -8,6 +8,7 @@ import math
 import os, sys
 import logging
 import random
+import pdb
 
 curr_file_dir = os.path.dirname(os.path.abspath(__file__))
 experiments_root_dir = os.path.join(curr_file_dir, '..')
@@ -280,9 +281,11 @@ class MosrangeSelector(Selector):
         return []
 
     def calculate_runtime_range(self):
-        metric_low_val = self.metric_val * (1 - self.range_epsilon)
-        metric_hi_val = self.metric_val * (1 + self.range_epsilon)
+        range_epsilon_delta = self.range_epsilon * self.metric_range_delta
+        metric_low_val = self.metric_val - range_epsilon_delta
+        metric_hi_val = self.metric_val + range_epsilon_delta
         range_df = self.results_df.query(f'{metric_hi_val} >= {self.metric_name} >= {metric_low_val}')
+        self.logger.info(f'[DEBUG]: calculate_runtime_range: {metric_hi_val} >= {self.metric_name} >= {metric_low_val} --> #{len(range_df)} layouts')
 
         if len(range_df) < 2:
             return 0
@@ -291,6 +294,8 @@ class MosrangeSelector(Selector):
         min_runtime = range_df['cpu_cycles'].min()
         range_percentage = (max_runtime - min_runtime) / min_runtime
         range_percentage = round(range_percentage*100, 2)
+
+        self.logger.info(f'current runtime range: {range_percentage}%')
 
         return range_percentage
 
@@ -302,6 +307,7 @@ class MosrangeSelector(Selector):
         return diff_ratio < 0.01
 
     def is_result_within_target_abs_range(self, layout_res):
+        assert False,'relative-epsilon surrounding range should be used instead of absolute-epsilon'
         if layout_res is None:
             return False
         min_val = self.metric_val * (1 - self.range_epsilon)
@@ -316,7 +322,9 @@ class MosrangeSelector(Selector):
         min_coverage = self.metric_coverage - epsilon
         max_coverage = self.metric_coverage + epsilon
         layout_coverage = self.realMetricCoverage(layout_res, self.metric_name)
-        return min_coverage <= layout_coverage <= max_coverage
+        result = (min_coverage <= layout_coverage <= max_coverage)
+        self.logger.info(f'[DEBUG]: is_result_within_target_rel_range: {min_coverage} <= {layout_coverage} <= {max_coverage} --> {result}')
+        return result
 
     def is_result_within_target_range(self, layout_res):
         if self.absolute_range_epsilon:
@@ -324,17 +332,18 @@ class MosrangeSelector(Selector):
         return self.is_result_within_target_rel_range(layout_res)
 
     def get_layounts_within_target_abs_range(self):
+        assert False,'relative-epsilon surrounding range should be used instead of absolute-epsilon'
         min_val = self.metric_val * (1 - self.range_epsilon)
         max_val = self.metric_val * (1 + self.range_epsilon)
         res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
         return res
 
     def get_layounts_within_target_rel_range(self):
-        epsilon = self.range_epsilon * 100
-        rel_range_delta = epsilon * self.metric_range_delta
+        rel_range_delta = self.range_epsilon * self.metric_range_delta
         min_val = self.metric_val - rel_range_delta
         max_val = self.metric_val + rel_range_delta
         res = self.results_df.query(f'{min_val} <= {self.metric_name} <= {max_val}')
+        self.logger.info(f'[DEBUG]: get_layounts_within_target_rel_range: {min_val} <= {self.metric_name}={self.metric_val} <= {max_val} --> #{len(res)} layouts')
         return res
 
     def get_layounts_within_target_range(self):
@@ -442,23 +451,20 @@ class MosrangeSelector(Selector):
         return mem_layouts
 
     def combine_surrounding_layouts(self, results_df):
-        surrounding_percentile = self.range_epsilon
-        while surrounding_percentile < 1:
-            for idx in range(self.num_layouts):
-                lower_layout, upper_layout = self.get_surrounding_pair(results_df, surrounding_percentile, idx)
-                # if the same surrounding layouts selected, then try to find another pair
-                if self.last_lo_layout is not None \
-                    and self.last_hi_layout is not None \
-                    and set(self.last_lo_layout) == set(lower_layout) \
-                    and set(self.last_hi_layout) == set(upper_layout):
-                    continue
-                else:
-                    mem_layout = self.combine_layouts(lower_layout, upper_layout)
-                    if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
-                        self.last_lo_layout = lower_layout
-                        self.last_hi_layout = upper_layout
-                        return mem_layout
-            surrounding_percentile += 0.01
+        for idx in range(self.num_layouts):
+            lower_layout, upper_layout = self.get_surrounding_pair(results_df, layout_pair_idx=idx)
+            # if the same surrounding layouts selected, then try to find another pair
+            if self.last_lo_layout is not None \
+                and self.last_hi_layout is not None \
+                and set(self.last_lo_layout) == set(lower_layout) \
+                and set(self.last_hi_layout) == set(upper_layout):
+                continue
+            else:
+                mem_layout = self.combine_layouts(lower_layout, upper_layout)
+                if mem_layout and self.isPagesListUnique(mem_layout, self.layouts):
+                    self.last_lo_layout = lower_layout
+                    self.last_hi_layout = upper_layout
+                    return mem_layout
         return []
 
     def select_next_layout(self):
@@ -625,7 +631,8 @@ class MosrangeSelector(Selector):
         # pebs_df = self.orig_pebs_df
         while True:
             last_hi_layout_name = None
-            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            # all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by='cpu_cycles', ascending=True)
             # try to select layout that yields a data point at the desired metric_val
             for idx in range(len(all_pairs_df)):
                 pair = all_pairs_df.iloc[idx]
@@ -638,7 +645,8 @@ class MosrangeSelector(Selector):
                 hi_real_coverage = self.realCoverage(pair[f'{self.metric_name}_hi'], self.metric_name)
                 if self.select_desired_layout(hi_layout, hi_real_coverage, pebs_df):
                     break
-            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            # all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by=self.metric_name, ascending=True)
+            all_pairs_df = self.get_surrounding_layouts(res_df=self.results_df, by='cpu_cycles', ascending=True)
             # try to select layout that yields a data point at the desired metric_val
             for idx in range(len(all_pairs_df)):
                 pair = all_pairs_df.iloc[idx]
@@ -775,6 +783,9 @@ class MosrangeSelector(Selector):
         self.log_metadata()
 
         self.generate_initial_layouts()
+
+        pdb.set_trace()
+
         self.find_desired_layout()
         while True:
             rem_layouts = (self.num_layouts - self.last_layout_num) // 2
