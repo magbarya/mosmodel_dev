@@ -41,5 +41,6 @@ if __name__ == "__main__":
                              args.num_repeats,
                              args.metric,
                              args.metric_value,
-                             args.metric_coverage)
+                             args.metric_coverage,
+                             debug=args.debug)
     exp.run()

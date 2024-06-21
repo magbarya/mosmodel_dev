@@ -28,12 +28,14 @@ class MosrangeSelector(Selector):
                  metric_val,
                  metric_coverage,
                  range_epsilon=0.01,
-                 absolute_range_epsilon=False) -> None:
+                 absolute_range_epsilon=False,
+                 debug=False) -> None:
         self.num_generated_layouts = 0
         self.metric_val = metric_val
         self.metric_coverage = metric_coverage
         self.range_epsilon = range_epsilon
         self.absolute_range_epsilon = absolute_range_epsilon
+        self.debug = debug
         self.search_pebs_threshold = 0.5
         self.last_lo_layout = None
         self.last_hi_layout = None
@@ -784,7 +786,8 @@ class MosrangeSelector(Selector):
 
         self.generate_initial_layouts()
 
-        pdb.set_trace()
+        if self.debug:
+            pdb.set_trace()
 
         self.find_desired_layout()
         while True:
