@@ -4,7 +4,7 @@ SUBMODULES :=
 PERF_RECORD_FREQUENCY ?= $$(( 2**6 ))
 STLB_MISS_LOADS_PEBS_EVENT = $(shell perf list | grep retired | grep mem | grep stlb_miss_loads | tr -d ' ')
 STLB_MISS_STORES_PEBS_EVENT = $(shell perf list | grep retired | grep mem | grep stlb_miss_stores | tr -d ' ')
-PERF_MEM_STLB_MISSES_EVENTS = $(STLB_MISS_LOADS_PEBS_EVENT):pp,$(STLB_MISS_STORES_PEBS_EVENT):pp
+PERF_MEM_STLB_MISSES_EVENTS = $(STLB_MISS_LOADS_PEBS_EVENT):p,$(STLB_MISS_STORES_PEBS_EVENT):p
 PERF_MEM_RECORD_CMD = perf record --data --count=$(PERF_RECORD_FREQUENCY) --event=$(PERF_MEM_STLB_MISSES_EVENTS)
 
 PEBS_EXP_OUT_DIR := $(MODULE_NAME)/repeat0
@@ -15,7 +15,7 @@ $(MODULE_NAME): $(PEBS_TLB_MISS_TRACE_OUTPUT)
 
 $(PEBS_TLB_MISS_TRACE_OUTPUT): experiments/single_page_size/layouts/layout4kb.csv | experiments-prerequisites 
 	$(RUN_BENCHMARK) \
-		--num_threads=1 \
+		--num_threads=$(NUMBER_OF_THREADS) \
 		--exclude_files=$(notdir $@) --submit_command \
 		"$(PERF_MEM_RECORD_CMD) -- $(RUN_MOSALLOC_TOOL) --analyze -cpf $(ROOT_DIR)/experiments/single_page_size/layouts/layout4kb.csv --library $(MOSALLOC_TOOL)" \
 		$(BENCHMARK_PATH) $(dir $@)
