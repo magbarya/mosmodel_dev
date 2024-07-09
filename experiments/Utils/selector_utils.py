@@ -39,11 +39,10 @@ class Selector:
         self.logger = logging.getLogger(__name__)
         self.all_2mb_r = None
         self.all_4kb_r = None
-        self.load_completed = False
         self.__load()
-        self.load_completed = True
 
     def __load(self):
+        self.load_completed = False
         # read memory-footprints
         self.footprint_df = pd.read_csv(self.memory_footprint_file)
         self.mmap_footprint = self.footprint_df['anon-mmap-max'][0]
@@ -72,6 +71,9 @@ class Selector:
         self.all_4kb_layout = []
         self.all_2mb_layout = [i for i in range(self.num_hugepages)]
         self.all_pebs_pages_layout = self.pebs_pages
+
+        self.load_completed = True
+
         if self.generate_endpoints:
             self.run_endpoint_layouts()
 
@@ -200,7 +202,7 @@ class Selector:
 
     def realCoverage(self, layout_metric_val, metric_name=None):
         if not self.load_completed:
-            return -1000
+            return None
         if metric_name is None:
             metric_name = self.metric_name
         all_2mb_metric_val = self.all_2mb_r[metric_name]
@@ -464,9 +466,9 @@ class Selector:
         layout_res = self.get_layout_results(layout_name)
         if 'hugepages' not in layout_res:
             layout_res['hugepages'] = mem_layout
-            if self.load_completed:
-                layout_res['pebs_coverage'] = self.pebsTlbCoverage(mem_layout)
-                layout_res['real_coverage'] = self.realMetricCoverage(mem_layout)
+        if self.load_completed:
+            layout_res['pebs_coverage'] = self.pebsTlbCoverage(mem_layout)
+            layout_res['real_coverage'] = self.realMetricCoverage(layout_res)
         self.log_layout_result(layout_res)
         return layout_res
 
