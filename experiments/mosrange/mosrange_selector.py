@@ -321,6 +321,15 @@ class MosrangeSelector(Selector):
             self.run_next_layout(layout_with_all_zeroes)
             self.run_next_layout(layout_without_zeroes)
 
+            zp_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+            zp_df['cumsum'] = zp_df['TLB_COVERAGE'].cumsum()
+            zp_df = zp_df[zp_df['cumsum'] >= 99]
+            zero_pages = zp_df['PAGE_NUMBER'].to_list()
+            layout_with_all_zeroes = list(set(layout + zero_pages))
+            layout_without_zeroes = list(set(layout) - set(zero_pages))
+            self.run_next_layout(layout_with_all_zeroes)
+            self.run_next_layout(layout_without_zeroes)
+
             if self.num_generated_layouts >= max_iterations:
                 break
 
@@ -328,8 +337,8 @@ class MosrangeSelector(Selector):
     #   Initial layouts
     # =================================================================== #
 
-    def select_fixed_intervals_init_layouts(self, num_layouts=10):
-        init_layouts = []
+    def select_fixed_intervals_init_layouts(self, num_layouts=6):
+        init_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         step = 100 / num_layouts
         pebs_val = 0
@@ -908,6 +917,7 @@ class MosrangeSelector(Selector):
         layout, layout_result = self.find_desired_layout(initial_layouts)
         self.logger.info("=====================================================")
         self.logger.info(f"Finished converging to required point")
+        self.logger.info(f"Starting shaking runtime")
         self.logger.info("=====================================================")
         self.shake_runtime(layout, num_layouts_round1)
 
@@ -918,6 +928,7 @@ class MosrangeSelector(Selector):
         layout, layout_result = self.find_desired_layout(initial_layouts)
         self.logger.info("=====================================================")
         self.logger.info(f"Finished converging to required point")
+        self.logger.info(f"Starting shaking runtime")
         self.logger.info("=====================================================")
         self.shake_runtime(layout, num_layouts_round2)
 
