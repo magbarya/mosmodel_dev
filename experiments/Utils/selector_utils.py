@@ -39,10 +39,10 @@ class Selector:
         self.logger = logging.getLogger(__name__)
         self.all_2mb_r = None
         self.all_4kb_r = None
+        self.load_completed = False
         self.__load()
 
     def __load(self):
-        self.load_completed = False
         # read memory-footprints
         self.footprint_df = pd.read_csv(self.memory_footprint_file)
         self.mmap_footprint = self.footprint_df['anon-mmap-max'][0]
@@ -239,6 +239,10 @@ class Selector:
                 self.all_2mb_r = row
             elif hugepages_set == all_pebs_set:
                 self.all_pebs_r = row
+
+        self.load_completed = True
+        assert self.all_2mb_r is not None
+        assert self.all_4kb_r is not None
 
         all_2mb_metric_val = self.all_2mb_r[self.metric_name]
         all_4kb_metric_val = self.all_4kb_r[self.metric_name]
