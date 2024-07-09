@@ -72,10 +72,10 @@ class Selector:
         self.all_2mb_layout = [i for i in range(self.num_hugepages)]
         self.all_pebs_pages_layout = self.pebs_pages
 
-        self.load_completed = True
-
         if self.generate_endpoints:
             self.run_endpoint_layouts()
+
+        self.load_completed = True
 
         # update results_df after endpoint layouts were added
         for index, row in self.results_df.iterrows():
