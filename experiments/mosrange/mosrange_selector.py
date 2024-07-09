@@ -421,8 +421,10 @@ class MosrangeSelector(Selector):
             # Otherwise, take the rows immediately before and after the insertion point
             surrounding_rows = results_df.iloc[[insert_pos - 1, insert_pos]]
         prev_row, next_row = surrounding_rows.iloc[0], surrounding_rows.iloc[1]
-        expected_pebs = self.calc_pebs_coverage_proportion(prev_row, next_row)
-        return expected_pebs, prev_row, next_row
+        left = prev_row # left has smaller misses TODO: for hits convert the order
+        right = next_row
+        expected_pebs = self.calc_pebs_coverage_proportion(right, left)
+        return expected_pebs, right, left
 
     def calc_pebs_coverage_proportion(self, base_layout_r, next_layout_r):
         prev_real = base_layout_r['real_coverage']
