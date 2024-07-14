@@ -880,13 +880,17 @@ class MosrangeSelector(Selector):
         assert layout_result is not None
 
         right_r = self.run_next_layout(right)
-        left_layout_r = self.run_next_layout(left)
+        left_r = self.run_next_layout(left)
         if self.realMetricCoverage(right_r) < self.realMetricCoverage(left_r):
             base_layout = right
+            base_layout_r = right_r
             next_layout = left
+            next_layout_r = left_r
         else:
             base_layout = left
+            base_layout_r = left_r
             next_layout = right
+            next_layout_r = right_r
 
         while not self.is_result_within_target_range(layout_result):
             alpha, beta, gamma, delta, U = self.get_working_sets(next_layout, base_layout)
