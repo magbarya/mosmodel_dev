@@ -37,6 +37,9 @@ class Selector:
         self.layouts = []
         self.layout_names = []
         self.logger = logging.getLogger(__name__)
+        self.all_2mb_r = None
+        self.all_4kb_r = None
+        self.load_completed = False
         self.__load()
 
     def __load(self):
@@ -61,7 +64,8 @@ class Selector:
             self.pebs_pages = list(set(self.pebs_df['PAGE_NUMBER'].to_list()))
             self.pages_not_in_pebs = list(set(self.all_pages) - set(self.pebs_pages))
             self.total_misses = self.pebs_df['NUM_ACCESSES'].sum()
-        # load results file
+
+         # load results file
         self.results_df, _ = self.collect_results(filter_results=False)
 
         self.all_4kb_layout = []
@@ -70,6 +74,14 @@ class Selector:
 
         if self.generate_endpoints:
             self.run_endpoint_layouts()
+
+        self.load_completed = True
+
+        # update results_df after endpoint layouts were added
+        for index, row in self.results_df.iterrows():
+            mem_layout_pages = self.results_df.at[index, 'hugepages']
+            self.results_df.at[index, 'pebs_coverage'] = self.pebsTlbCoverage(mem_layout_pages)
+            self.results_df.at[index, 'real_coverage'] = self.realMetricCoverage(self.results_df.loc[index])
 
     def run_command(self, command, out_dir):
         if not os.path.exists(out_dir):
@@ -118,10 +130,16 @@ class Selector:
             return results_df, found_outliers
 
         results_df['hugepages'] = None
+        results_df['pebs_coverage'] = None
+        results_df['real_coverage'] = None
         for index, row in results_df.iterrows():
             layout_name = row['layout']
             mem_layout_pages = LayoutUtils.load_layout_hugepages(layout_name, self.exp_root_dir)
             results_df.at[index, 'hugepages'] = mem_layout_pages
+            if self.load_completed:
+                results_df.at[index, 'pebs_coverage'] = self.pebsTlbCoverage(mem_layout_pages)
+                results_df.at[index, 'real_coverage'] = self.realMetricCoverage(results_df.loc[index])
+
         if filter_results:
             results_df = results_df.query(f'layout in {self.layout_names}').reset_index(drop=True)
             self.logger.info(f'collect results and keep the following {len(self.layout_names)} layouts: {self.layout_names[0]}--{self.layout_names[-1]}')
@@ -183,6 +201,8 @@ class Selector:
         return self.realCoverage(layout_results[metric_name], metric_name)
 
     def realCoverage(self, layout_metric_val, metric_name=None):
+        if not self.load_completed:
+            return None
         if metric_name is None:
             metric_name = self.metric_name
         all_2mb_metric_val = self.all_2mb_r[metric_name]
@@ -219,6 +239,10 @@ class Selector:
                 self.all_2mb_r = row
             elif hugepages_set == all_pebs_set:
                 self.all_pebs_r = row
+
+        self.load_completed = True
+        assert self.all_2mb_r is not None
+        assert self.all_4kb_r is not None
 
         all_2mb_metric_val = self.all_2mb_r[self.metric_name]
         all_4kb_metric_val = self.all_4kb_r[self.metric_name]
@@ -395,21 +419,13 @@ class Selector:
         self.logger.info('===========================================')
 
     def run_workload(self, mem_layout, layout_name):
-        # TODO: use below flow to check wether the layout content exists under different layout_name
-        prev_res = self.get_layout_results(layout_name)
-        if prev_res is not None:
-            self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
-            self.layouts.append(mem_layout)
-            self.layout_names.append(layout_name)
-            self.log_layout_result(prev_res, True)
-            return prev_res
-
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
         # if the layout's measurements were found
         if found and prev_res is not None:
             self.logger.info(f'+++ {layout_name} already exists, skip running it +++')
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
+            self.log_layout_result(prev_res, True)
             return prev_res
         elif found and prev_res is None:
             self.logger.warning(f'--- {layout_name} already exists but its content is changed. Overwriting and rerunning ---')
@@ -446,6 +462,9 @@ class Selector:
         layout_res = self.get_layout_results(layout_name)
         if 'hugepages' not in layout_res:
             layout_res['hugepages'] = mem_layout
+        if self.load_completed:
+            layout_res['pebs_coverage'] = self.pebsTlbCoverage(mem_layout)
+            layout_res['real_coverage'] = self.realMetricCoverage(layout_res)
         self.log_layout_result(layout_res)
         return layout_res
 
