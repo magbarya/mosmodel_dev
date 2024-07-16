@@ -336,28 +336,28 @@ class MosrangeSelector(Selector):
     # =================================================================== #
     #   Initial layouts
     # =================================================================== #
-    
+
     def select_uni_dist_init_layouts_v2(self):
         pebs_df_v1 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         # desired weights for each group layout
         buckets_weights_v1 = [56, 28, 14]
         group_v1 = self.fillBuckets(pebs_df_v1, buckets_weights_v1)
-        
+
         exclude_pages = group_v1[2]
         pebs_df_v2_no_14 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
         group_v2_14 = self.fillBuckets(pebs_df_v2_no_14, [14])
-        
+
         exclude_pages = group_v1[1] + group_v2_14[0]
         pebs_df_v2_no_28 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
         group_v2_28 = self.fillBuckets(pebs_df_v2_no_28, [28])
-        
-        exclude_pages = group_v2_14[0] + group_v2_28[1]
+
+        exclude_pages = group_v2_14[0] + group_v2_28[0]
         pebs_df_v2 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
         group_v2_56 = self.fillBuckets(pebs_df_v2, [56])
-        
+
         group_v2 = [group_v2_56[0], group_v2_28[0], group_v2_14[0]]
         return self.createSubgroups(group_v2)
-    
+
     def select_fixed_intervals_init_layouts(self, num_layouts=6):
         init_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -734,7 +734,7 @@ class MosrangeSelector(Selector):
             if right_pebs <= self.metric_coverage <= left_pebs:
                 break
         return left, right
-    
+
     def find_surrounding_initial_layouts(self, initial_layouts):
         # sort layouts by their PEBS
         sorted_initial_layouts = sorted(
@@ -1014,7 +1014,7 @@ class MosrangeSelector(Selector):
         real_coverage = self.realMetricCoverage(layout_result)
         self.metric_coverage = real_coverage
         self.update_metric_values()
-        
+
         self.logger.info("=====================================================")
         self.logger.info(f"Starting converging to required point")
         self.logger.info("=====================================================")
@@ -1039,6 +1039,6 @@ class MosrangeSelector(Selector):
             "================================================================="
         )
         # MosrangeSelector.pause()
-    
+
     def run(self):
         self.quick_run()
