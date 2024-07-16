@@ -1013,6 +1013,7 @@ class MosrangeSelector(Selector):
         # update metric_coverage to the one got by the executed layout to save convergence time
         real_coverage = self.realMetricCoverage(layout_result)
         self.metric_coverage = real_coverage
+        self.metric_val = None
         self.update_metric_values()
 
         self.logger.info("=====================================================")
