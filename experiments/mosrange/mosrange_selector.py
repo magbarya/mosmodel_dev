@@ -335,7 +335,28 @@ class MosrangeSelector(Selector):
     # =================================================================== #
     #   Initial layouts
     # =================================================================== #
-
+    
+    def select_uni_dist_init_layouts_v2(self):
+        pebs_df_v1 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        # desired weights for each group layout
+        buckets_weights_v1 = [56, 28, 14]
+        group_v1 = self.fillBuckets(pebs_df_v1, buckets_weights_v1)
+        
+        exclude_pages = group_v1[2]
+        pebs_df_v2_no_14 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
+        group_v2_14 = self.fillBuckets(pebs_df_v2_no_14, [14])
+        
+        exclude_pages = group_v1[1] + group_v2_14[0]
+        pebs_df_v2_no_28 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
+        group_v2_28 = self.fillBuckets(pebs_df_v2_no_28, [28])
+        
+        exclude_pages = group_v2_14[0] + group_v2_28[1]
+        pebs_df_v2 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False).query(f'PAGE_NUMBER not in {exclude_pages}')
+        group_v2_56 = self.fillBuckets(pebs_df_v2, [56])
+        
+        group_v2 = [group_v2_56[0], group_v2_28[0], group_v2_14[0]]
+        return self.createSubgroups(group_v2)
+    
     def select_fixed_intervals_init_layouts(self, num_layouts=6):
         init_layouts = [self.all_4kb_layout, self.all_2mb_layout, self.all_pebs_pages_layout]
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -693,6 +714,26 @@ class MosrangeSelector(Selector):
         self.last_layout_result = self.run_next_layout(next_layout)
         return next_layout, self.last_layout_result
 
+    def find_virtual_surrounding_initial_layouts(self, initial_layouts):
+        # sort layouts by their PEBS
+        sorted_initial_layouts = sorted(
+            initial_layouts, key=lambda layout: self.pebsTlbCoverage(layout)
+        )
+        right_i = 0
+        right = sorted_initial_layouts[right_i]
+        left_i = 0
+        left = sorted_initial_layouts[left_i]
+        for i in range(len(sorted_initial_layouts)):
+            right_i = left_i
+            right = left
+            left_i = i
+            left = sorted_initial_layouts[i]
+            left_pebs = self.pebsTlbCoverage(left)
+            right_pebs = self.pebsTlbCoverage(right)
+            if right_pebs <= self.metric_coverage <= left_pebs:
+                break
+        return left, right
+    
     def find_surrounding_initial_layouts(self, initial_layouts):
         # sort layouts by their PEBS
         sorted_initial_layouts = sorted(
@@ -910,7 +951,7 @@ class MosrangeSelector(Selector):
 
         return layout, layout_result
 
-    def run(self):
+    def full_run(self):
         self.log_metadata()
 
         if self.debug:
@@ -952,3 +993,51 @@ class MosrangeSelector(Selector):
             "================================================================="
         )
         # MosrangeSelector.pause()
+
+    def quick_run(self):
+        self.log_metadata()
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Running first layout")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_uni_dist_init_layouts()
+        left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
+        layout = self.select_layout_from_endpoints(left, right)
+        tail_pages = self.get_tail_pages(total_threshold=1)
+        first_layout = list(set(layout) | set(tail_pages))
+        layout_result = self.run_next_layout(first_layout)
+        # update metric_coverage to the one got by the executed layout to save convergence time
+        real_coverage = self.realMetricCoverage(layout_result)
+        self.metric_coverage = real_coverage
+        self.update_metric_values()
+        
+        self.logger.info("=====================================================")
+        self.logger.info(f"Starting converging to required point")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_uni_dist_init_layouts_v2()
+        layout, layout_result = self.find_desired_layout(initial_layouts)
+        self.logger.info("=====================================================")
+        self.logger.info(f"Finished converging to required point")
+        self.logger.info(f"Starting shaking runtime")
+        self.logger.info("=====================================================")
+        rem_layouts = self.num_layouts - self.last_layout_num
+        num_layouts = max(rem_layouts, 5)
+        self.shake_runtime(layout, num_layouts)
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info(
+            "================================================================="
+        )
+        self.logger.info(f"Finished running MosRange process for:\n{self.exp_root_dir}")
+        self.logger.info(
+            "================================================================="
+        )
+        # MosrangeSelector.pause()
+    
+    def run(self):
+        self.quick_run()
