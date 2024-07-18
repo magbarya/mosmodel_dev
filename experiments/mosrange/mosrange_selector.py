@@ -962,12 +962,16 @@ class MosrangeSelector(Selector):
             last_base_layout = base_layout
             last_next_layout = next_layout
 
+            found = False
             for i in range(len(self.res_df)):
                 for j in range(len(self.res_df)):
-                _, base_layout_r, next_layout_r = self.get_expected_pebs_coverage(left_offset=i, right_offset=j)
-                base_layout = base_layout_r['hugepages']
-                next_layout = next_layout_r['hugepages']
-                if set(base_layout) != set(last_base_layout) or set(next_layout) != set(last_next_layout):
+                    _, base_layout_r, next_layout_r = self.get_expected_pebs_coverage(left_offset=i, right_offset=j)
+                    base_layout = base_layout_r['hugepages']
+                    next_layout = next_layout_r['hugepages']
+                    if set(base_layout) != set(last_base_layout) or set(next_layout) != set(last_next_layout):
+                        found = True
+                        break
+                if found:
                     break
 
         return layout, layout_result
