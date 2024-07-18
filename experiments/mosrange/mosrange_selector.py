@@ -440,7 +440,7 @@ class MosrangeSelector(Selector):
             left_idx, right_idx = -2, -1
         else:
             # Otherwise, take the rows immediately before and after the insertion point
-            surrounding_rows = results_df.iloc[[insert_pos - 1, insert_pos]]
+            left_idx, right_idx = insert_pos - 1, insert_pos
 
         if (left_idx - left_offset) >= 0:
             left_idx -= left_offset
