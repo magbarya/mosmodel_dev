@@ -428,22 +428,30 @@ class MosrangeSelector(Selector):
     #   General utilities
     # =================================================================== #
 
-    def get_expected_pebs_coverage(self):
+    def get_expected_pebs_coverage(self, left_offset=0, right_offset=0):
         results_df = self.results_df.sort_values(self.metric_name)
         insert_pos = np.searchsorted(results_df[self.metric_name].values, self.metric_val)
         # Get the surrounding rows
         if insert_pos == 0:
             # If the insertion point is at the beginning, take the first two rows
-            surrounding_rows = results_df.iloc[[0, 1]]
+            left_idx, right_idx = 0, 1
         elif insert_pos == len(results_df):
             # If the insertion point is at the end, take the last two rows
-            surrounding_rows = results_df.iloc[[-2, -1]]
+            left_idx, right_idx = -2, -1
         else:
             # Otherwise, take the rows immediately before and after the insertion point
             surrounding_rows = results_df.iloc[[insert_pos - 1, insert_pos]]
-        prev_row, next_row = surrounding_rows.iloc[0], surrounding_rows.iloc[1]
-        left = prev_row # left has smaller misses TODO: for hits convert the order
-        right = next_row
+
+        if (left_idx - left_offset) >= 0:
+            left_idx -= left_offset
+        if (right_idx + right_offset) < len(results_df):
+            right_idx += right_offset
+        surrounding_rows = results_df.iloc[[left_idx, right_idx]]
+        left = results_df.iloc[left_idx]
+        right = results_df.iloc[right_idx]
+        # prev_row, next_row = surrounding_rows.iloc[0], surrounding_rows.iloc[1]
+        # left = prev_row # left has smaller misses TODO: for hits convert the order
+        # right = next_row
         expected_pebs = self.calc_pebs_coverage_proportion(right, left)
         return expected_pebs, right, left
 
@@ -921,7 +929,13 @@ class MosrangeSelector(Selector):
         assert layout_result is not None
 
         right_r = self.run_next_layout(right)
+        if self.is_result_within_target_range(right_r):
+            return right, right_r
+
         left_r = self.run_next_layout(left)
+        if self.is_result_within_target_range(left_r):
+            return left, left_r
+
         if self.realMetricCoverage(right_r) < self.realMetricCoverage(left_r):
             base_layout = right
             base_layout_r = right_r
@@ -946,9 +960,16 @@ class MosrangeSelector(Selector):
             if layout_result is None:
                 layout, layout_result = self.remove_pages_to_find_desired_layout(base_layout_r, next_layout_r, beta)
 
-            _, base_layout_r, next_layout_r = self.get_expected_pebs_coverage()
-            base_layout = base_layout_r['hugepages']
-            next_layout = next_layout_r['hugepages']
+            last_base_layout = base_layout
+            last_next_layout = next_layout
+
+            for i in range(len(self.res_df)):
+                for j in range(len(self.res_df)):
+                _, base_layout_r, next_layout_r = self.get_expected_pebs_coverage(left_offset=i, right_offset=j)
+                base_layout = base_layout_r['hugepages']
+                next_layout = next_layout_r['hugepages']
+                if set(base_layout) != set(last_base_layout) or set(next_layout) != set(last_next_layout):
+                    break
 
         return layout, layout_result
 
