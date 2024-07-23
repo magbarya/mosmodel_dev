@@ -140,6 +140,7 @@ class Selector:
                 results_df.at[index, 'pebs_coverage'] = self.pebsTlbCoverage(mem_layout_pages)
                 results_df.at[index, 'real_coverage'] = self.realMetricCoverage(results_df.loc[index])
 
+        self._full_results_df = results_df.copy()
         if filter_results:
             results_df = results_df.query(f'layout in {self.layout_names}').reset_index(drop=True)
             self.logger.info(f'collect results and keep the following {len(self.layout_names)} layouts: {self.layout_names[0]}--{self.layout_names[-1]}')
@@ -381,12 +382,13 @@ class Selector:
         return False, None
 
     def layout_was_run(self, layout_name, mem_layout):
-        if self.results_df is None or self.results_df.empty:
+        full_results_df, _ = self.collect_results(False)
+        if full_results_df is None or full_results_df.empty:
             return False, None
 
         prev_layout_res = None
-        prev_layout_res = self.results_df.query(f'layout == "{layout_name}"')
-        # prev_layout_res = self.results_df[self.results_df['layout'] == layout_name]
+        prev_layout_res = full_results_df.query(f'layout == "{layout_name}"')
+        # prev_layout_res = full_results_df[full_results_df['layout'] == layout_name]
         if prev_layout_res is None or prev_layout_res.empty:
             # the layout does not exist in the results file
             return False, None
