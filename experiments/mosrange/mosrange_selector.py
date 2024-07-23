@@ -1065,5 +1065,99 @@ class MosrangeSelector(Selector):
         )
         # MosrangeSelector.pause()
 
+    def run_with_different_init_layouts(self):
+        self.log_metadata()
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutA: Running first layout")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_uni_dist_init_layouts()
+        left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
+        layout_1 = self.select_layout_from_endpoints(left, right)
+        layout_result = self.run_next_layout(layout_1)
+        # update metric_coverage to the one got by the executed layout to save convergence time
+        real_coverage = self.realMetricCoverage(layout_result)
+        self.metric_coverage = real_coverage
+        self.metric_val = None
+        self.update_metric_values()
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Running LayoutA with zero pages")
+        self.logger.info("=====================================================")
+        tail_pages = self.get_tail_pages(total_threshold=1)
+        layout_1_zeroes = list(set(layout_1) | set(tail_pages))
+        layout_result = self.run_next_layout(layout_1_zeroes)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutB: Starting converging using Moselect initial layouts V2")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_uni_dist_init_layouts_v2()
+        layout_2, layout_result = self.find_desired_layout(initial_layouts)
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutB: Finished converging using Moselect initial layouts V2")
+        self.logger.info(f"Running LayoutB with zero pages")
+        self.logger.info("=====================================================")
+        layout_2_zeroes = list(set(layout_2) | set(tail_pages))
+        layout_result = self.run_next_layout(layout_2_zeroes)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutC: Starting converging using fixed interval 10 init layouts")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_fixed_intervals_init_layouts(num_layouts=10)
+        layout_3, layout_result = self.find_desired_layout(initial_layouts)
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutC: Finished converging using fixed interval 10 init layouts")
+        self.logger.info(f"Running LayoutC with zero pages")
+        self.logger.info("=====================================================")
+        layout_3_zeroes = list(set(layout_3) | set(tail_pages))
+        layout_result = self.run_next_layout(layout_3_zeroes)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutD: Starting converging using fixed interval 6 init layouts")
+        self.logger.info("=====================================================")
+        initial_layouts = self.select_fixed_intervals_init_layouts(num_layouts=6)
+        layout_4, layout_result = self.find_desired_layout(initial_layouts)
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutD: Finished converging using fixed interval 6 init layouts")
+        self.logger.info(f"Running LayoutD with zero pages")
+        self.logger.info("=====================================================")
+        layout_4_zeroes = list(set(layout_4) | set(tail_pages))
+        layout_result = self.run_next_layout(layout_4_zeroes)
+
+        rem_layouts = self.num_layouts - self.last_layout_num
+        num_layouts = max(rem_layouts//4, 5)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Starting shaking runtime for LayoutA")
+        self.logger.info("=====================================================")
+        self.shake_runtime(layout_1, num_layouts)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Starting shaking runtime for LayoutB")
+        self.logger.info("=====================================================")
+        self.shake_runtime(layout_2, num_layouts)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Starting shaking runtime for LayoutC")
+        self.logger.info("=====================================================")
+        self.shake_runtime(layout_3, num_layouts)
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Starting shaking runtime for LayoutD")
+        self.logger.info("=====================================================")
+        self.shake_runtime(layout_4, num_layouts)
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info("=================================================================")
+        self.logger.info(f"Finished running MosRange process for:\n{self.exp_root_dir}")
+        self.logger.info("=================================================================")
+        # MosrangeSelector.pause()
+
     def run(self):
-        self.quick_run()
+        self.run_with_different_init_layouts()
+
