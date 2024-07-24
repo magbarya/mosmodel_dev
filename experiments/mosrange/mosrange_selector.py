@@ -5,6 +5,7 @@ import os, sys
 import logging
 import random
 import numpy as np
+from pathlib import Path
 
 curr_file_dir = os.path.dirname(os.path.abspath(__file__))
 experiments_root_dir = os.path.join(curr_file_dir, "..")
@@ -60,6 +61,10 @@ class MosrangeSelector(Selector):
         self.logger = logging.getLogger(__name__)
         self.update_metric_values()
         self.debug = debug
+
+        current_file_path = Path(__file__).resolve()
+        current_directory = current_file_path.parent
+        self.log_file_path = current_directory / "log.csv"
 
     def update_metric_values(self):
         if self.metric_val is None:
@@ -336,7 +341,7 @@ class MosrangeSelector(Selector):
     #   Initial layouts
     # =================================================================== #
 
-    def select_uni_dist_init_layouts_v2(self):
+    def get_moselect_distinct_init_layouts(self):
         pebs_df_v1 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         # desired weights for each group layout
         buckets_weights_v1 = [56, 28, 14]
@@ -369,7 +374,35 @@ class MosrangeSelector(Selector):
                 init_layouts.append(layout)
         return init_layouts
 
-    def select_uni_dist_init_layouts(self):
+    def get_moselect_init_layouts_v4(self):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        # desired weights for each group layout
+        buckets_weights = [56, 28, 14]
+        group = self.fillBuckets(pebs_df, buckets_weights, start_from_tail=True, fill_min_buckets_first=False)
+        return self.createSubgroups(group)
+
+    def get_moselect_init_layouts_v3(self):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        # desired weights for each group layout
+        buckets_weights = [56, 28, 14]
+        group = self.fillBuckets(pebs_df, buckets_weights, start_from_tail=True, fill_min_buckets_first=True)
+        return self.createSubgroups(group)
+
+    def get_moselect_init_layouts_v2(self):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        # desired weights for each group layout
+        buckets_weights = [56, 28, 14]
+        group = self.fillBuckets(pebs_df, buckets_weights, start_from_tail=False, fill_min_buckets_first=False)
+        return self.createSubgroups(group)
+
+    def get_moselect_init_layouts_4_groups(self):
+        pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
+        # desired weights for each group layout
+        buckets_weights = [52, 26, 13, 6.5]
+        group = self.fillBuckets(pebs_df, buckets_weights)
+        return self.createSubgroups(group)
+
+    def get_moselect_init_layouts(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         # desired weights for each group layout
         buckets_weights = [56, 28, 14]
@@ -1065,5 +1098,83 @@ class MosrangeSelector(Selector):
         )
         # MosrangeSelector.pause()
 
+    def log(self, msg):
+        with open(self.log_file_path, 'a+') as f:
+            f.write(msg)
+            f.write('\n')
+
+    def run_with_custom_init_layouts(self, layout_name, initial_layouts, shake_budget=5):
+        self.logger.info("=====================================================")
+        self.logger.info(f"==> {layout_name}: Starting converging")
+        self.log(f"{layout_name}_start_converge,layout{self.last_layout_num+1}")
+        layout, layout_result = self.find_desired_layout(initial_layouts)
+        self.log(f"{layout_name},layout{self.last_layout_num}")
+        self.logger.info(f"<== {layout_name}: Finished converging")
+        self.logger.info("=====================================================")
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"Running {layout_name} with zero pages")
+        self.logger.info("=====================================================")
+        layout_zeroes = list(set(layout) | set(tail_pages))
+        layout_result = self.run_next_layout(layout_zeroes)
+        self.log(f"{layout_name}_with_zeroes,layout{self.last_layout_num}")
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"==> {layout_name}: Starting shaking runtime")
+        self.log(f"{layout_name}_start_shake_runtime,layout{self.last_layout_num+1}")
+        self.shake_runtime(layout, shake_budget)
+        self.log(f"{layout_name}_end_shake_runtime,layout{self.last_layout_num}")
+        self.logger.info(f"<== {layout_name}: Finished shaking runtime")
+        self.logger.info("=====================================================")
+
+    def run_with_different_init_layouts(self):
+        self.log_metadata()
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info("=====================================================")
+        self.logger.info(f"LayoutA: Running first layout")
+        self.logger.info("=====================================================")
+        initial_layouts = self.get_moselect_init_layouts()
+        left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
+        layout_1 = self.select_layout_from_endpoints(left, right)
+        layout_result = self.run_next_layout(layout_1)
+        # update metric_coverage to the one got by the executed layout to save convergence time
+        real_coverage = self.realMetricCoverage(layout_result)
+        self.metric_coverage = real_coverage
+        self.metric_val = None
+        self.update_metric_values()
+
+        self.log(f"points_group,layout_name")
+        self.log(f"LayoutA,layout{self.last_layout_num}")
+
+        rem_layouts = self.num_layouts - self.last_layout_num
+        shake_budget = max(self.num_layouts//6, 5)
+
+        # initial_layouts = self.get_moselect_init_layouts()
+        self.run_with_custom_init_layouts('LayoutA', initial_layouts, shake_budget)
+
+        initial_layouts = self.get_moselect_init_layouts_4_groups()
+        self.run_with_custom_init_layouts('LayoutB', initial_layouts, shake_budget)
+
+        initial_layouts = self.get_moselect_init_layouts_v2()
+        self.run_with_custom_init_layouts('LayoutC', initial_layouts, shake_budget)
+
+        initial_layouts = self.get_moselect_init_layouts_v3()
+        self.run_with_custom_init_layouts('LayoutD', initial_layouts, shake_budget)
+
+        initial_layouts = self.get_moselect_init_layouts_v4()
+        self.run_with_custom_init_layouts('LayoutE', initial_layouts, shake_budget)
+
+        if self.debug:
+            breakpoint()
+
+        self.logger.info("=================================================================")
+        self.logger.info(f"Finished running MosRange process for:\n{self.exp_root_dir}")
+        self.logger.info("=================================================================")
+        # MosrangeSelector.pause()
+
     def run(self):
-        self.quick_run()
+        self.run_with_different_init_layouts()
+
