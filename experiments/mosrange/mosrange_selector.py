@@ -1116,6 +1116,7 @@ class MosrangeSelector(Selector):
         self.logger.info("=====================================================")
         self.logger.info(f"Running {layout_name} with zero pages")
         self.logger.info("=====================================================")
+        tail_pages = self.get_tail_pages(total_threshold=1)
         layout_zeroes = list(set(layout) | set(tail_pages))
         layout_result = self.run_next_layout(layout_zeroes)
         self.log(f"{layout_name}_with_zeroes,layout{self.last_layout_num}")
