@@ -793,11 +793,23 @@ class MosrangeSelector(Selector):
             right_pebs = self.pebsTlbCoverage(right)
             if right_pebs <= self.metric_coverage <= left_pebs:
                 break
-        layout, layout_result = self.run_layout_from_virtual_surroundings(left, right)
-        if layout_result is not None:
-            misses_real_coverage = self.realMetricCoverage(layout_result, 'stlb_misses')
-            if right_pebs <= misses_real_coverage <= left_pebs:
-                return left, right, layout, layout_result
+        layout_result = None
+        while layout_result is None:
+            for offst in [(1,0), (0,1), (1,1)]:
+                layout, layout_result = self.run_layout_from_virtual_surroundings(left, right)
+                if layout_result is not None:
+                    break
+                if right_i == 0 and left_i == len(sorted_initial_layouts)-1:
+                    assert True
+                r_i, l_i = offst
+                right_i = max(0, right_i-r_i)
+                left_i = min(left_i+l_i, len(sorted_initial_layouts)-1)
+                right = sorted_initial_layouts[right_i]
+                left = sorted_initial_layouts[left_i]
+
+        misses_real_coverage = self.realMetricCoverage(layout_result, 'stlb_misses')
+        if right_pebs <= misses_real_coverage <= left_pebs:
+            return left, right, layout, layout_result
 
         if right_pebs > misses_real_coverage:
             if right_i > 0:
