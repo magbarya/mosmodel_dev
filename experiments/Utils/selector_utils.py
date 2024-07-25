@@ -20,7 +20,8 @@ class Selector:
                  metric_name='stlb_misses',
                  rebuild_pebs=True,
                  skip_outliers=False,
-                 generate_endpoints=True) -> None:
+                 generate_endpoints=True,
+                 rerun_modified_layouts=False) -> None:
         self.memory_footprint_file = memory_footprint_file
         self.pebs_mem_bins_file = pebs_mem_bins_file
         self.exp_root_dir = exp_root_dir
@@ -32,6 +33,7 @@ class Selector:
         self.rebuild_pebs = rebuild_pebs
         self.skip_outliers = skip_outliers
         self.generate_endpoints = generate_endpoints
+        self.rerun_modified_layouts = rerun_modified_layouts
         self.last_layout_num = 0
         self.num_generated_layouts = 0
         self.layouts = []
@@ -396,7 +398,7 @@ class Selector:
         prev_layout_hugepages = prev_layout_res['hugepages']
         if set(prev_layout_hugepages) != set(mem_layout):
             # the existing layout has different hugepages set than the new one
-            return True, None
+            return False, prev_layout_res
 
         # the layout exists and has the same hugepages set
         return True, prev_layout_res
@@ -429,8 +431,16 @@ class Selector:
             self.layout_names.append(layout_name)
             self.log_layout_result(prev_res, True)
             return prev_res
-        elif found and prev_res is None:
-            self.logger.warning(f'--- {layout_name} already exists but its content is changed. Overwriting and rerunning ---')
+        elif not found and prev_res is not None:
+            self.logger.warning(f'--- {layout_name} already exists but its content is changed. ---')
+            if self.rerun_modified_layouts:
+                self.logger.warning(f'--- Overwriting {layout_name} and rerunning ---')
+            else:
+                prev_mem_layout = prev_res['hugepages']
+                self.layouts.append(prev_mem_layout)
+                self.layout_names.append(layout_name)
+                self.log_layout_result(prev_res, True)
+                return prev_res
         else: # layout_name was not found
             found, prev_res = self.find_layout_results(mem_layout)
             # if the layout was found but under different layout_name
