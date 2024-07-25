@@ -576,24 +576,21 @@ class MosrangeSelector(Selector):
 
         i = 0
         pages = None
-        max_threshold = 0.5
-        while pages is None or self.layout_exist(pages):
-            threshold = 0.1
-            while pages is None and threshold <= max_threshold:
-                pages, pebs_coverage = self.add_pages_from_working_set(
-                    base_layout_pages,
-                    add_working_set,
-                    desired_pebs_coverage,
-                    tail,
-                    threshold,
-                )
-                threshold += 0.1
+        threshold = 0.5
+        tmp_base_layout = base_layout_pages.copy()
+        for rp in remove_pages_subset:
+            pages, pebs_coverage = self.add_pages_from_working_set(
+                tmp_base_layout,
+                add_working_set,
+                desired_pebs_coverage,
+                tail,
+                threshold
+            )
+            if pages is not None and not self.layout_exist(pages):
+                break
             # if cannot find pages subset with the expected coverage
             # then remove the page with least coverage and try again
-            if i >= len(remove_pages_subset):
-                break
-            base_layout_pages.remove(remove_pages_subset[i])
-            i += 1
+            tmp_base_layout.remove(rp)
 
         if pages is None or self.layout_exist(pages):
             return None, 0
