@@ -1103,11 +1103,20 @@ class MosrangeSelector(Selector):
             f.write(msg)
             f.write('\n')
 
-    def run_with_custom_init_layouts(self, layout_name, initial_layouts, shake_budget=5):
+    def run_with_custom_init_layouts(self, layout_name, initial_layouts, shake_budget=5, first_group=False):
+        if first_group:
+            self.log(f"points_group,layout_name")
+
         self.logger.info("=====================================================")
         self.logger.info(f"==> {layout_name}: Starting converging")
         self.log(f"{layout_name}_start_converge,layout{self.last_layout_num+1}")
-        layout, layout_result = self.find_desired_layout(initial_layouts)
+
+        if first_group:
+            left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
+            layout = self.select_layout_from_endpoints(left, right)
+            layout_result = self.run_next_layout(layout)
+        else:
+            layout, layout_result = self.find_desired_layout(initial_layouts)
         self.log(f"{layout_name},layout{self.last_layout_num}")
         self.logger.info(f"<== {layout_name}: Finished converging")
         self.logger.info("=====================================================")
@@ -1119,6 +1128,13 @@ class MosrangeSelector(Selector):
         layout_zeroes = list(set(layout) | set(tail_pages))
         layout_result = self.run_next_layout(layout_zeroes)
         self.log(f"{layout_name}_with_zeroes,layout{self.last_layout_num}")
+
+        if first_group:
+            # update metric_coverage to the one got by the executed layout to save convergence time
+            real_coverage = self.realMetricCoverage(layout_result)
+            self.metric_coverage = real_coverage
+            self.metric_val = None
+            self.update_metric_values()
 
         self.logger.info("=====================================================")
         self.logger.info(f"==> {layout_name}: Starting shaking runtime")
@@ -1134,27 +1150,11 @@ class MosrangeSelector(Selector):
         if self.debug:
             breakpoint()
 
-        self.logger.info("=====================================================")
-        self.logger.info(f"LayoutA: Running first layout")
-        self.logger.info("=====================================================")
-        initial_layouts = self.get_moselect_init_layouts()
-        left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
-        layout_1 = self.select_layout_from_endpoints(left, right)
-        layout_result = self.run_next_layout(layout_1)
-        # update metric_coverage to the one got by the executed layout to save convergence time
-        real_coverage = self.realMetricCoverage(layout_result)
-        self.metric_coverage = real_coverage
-        self.metric_val = None
-        self.update_metric_values()
-
-        self.log(f"points_group,layout_name")
-        self.log(f"LayoutA,layout{self.last_layout_num}")
-
-        rem_layouts = self.num_layouts - self.last_layout_num
         shake_budget = max(self.num_layouts//6, 5)
+        self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
-        # initial_layouts = self.get_moselect_init_layouts()
-        self.run_with_custom_init_layouts('LayoutA', initial_layouts, shake_budget)
+        initial_layouts = self.get_moselect_init_layouts()
+        self.run_with_custom_init_layouts('LayoutA', initial_layouts, shake_budget, True)
 
         initial_layouts = self.get_moselect_init_layouts_4_groups()
         self.run_with_custom_init_layouts('LayoutB', initial_layouts, shake_budget)
