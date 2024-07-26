@@ -1029,8 +1029,10 @@ class MosrangeSelector(Selector):
                 base_layout_r = layout_result
             expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
 
-    def find_desired_layout(self, initial_layouts):
+    def find_desired_layout(self, initial_layouts, max_iterations=10):
         self.logger.debug(f"entry - find_desired_layout()")
+
+        tested_layouts = []
 
         left, right, layout, layout_result = self.find_surrounding_initial_layouts(initial_layouts)
         assert left is not None
@@ -1041,10 +1043,12 @@ class MosrangeSelector(Selector):
         right_r = self.run_next_layout(right)
         if self.is_result_within_target_range(right_r):
             return right, right_r
+        tested_layouts.append(right_r)
 
         left_r = self.run_next_layout(left)
         if self.is_result_within_target_range(left_r):
             return left, left_r
+        tested_layouts.append(left_r)
 
         if self.realMetricCoverage(right_r) < self.realMetricCoverage(left_r):
             base_layout = right
@@ -1069,6 +1073,21 @@ class MosrangeSelector(Selector):
                 layout, layout_result = self.add_pages_to_find_desired_layout(next_layout_r, base_layout_r, delta, None)
             if layout_result is None:
                 layout, layout_result = self.remove_pages_to_find_desired_layout(base_layout_r, next_layout_r, beta)
+
+            tested_layouts.append(layout_result)
+            # limit the convergence processes to up to max_iterations trials
+            if len(tested_layouts) > max_iterations:
+                # find closest layout to desired coverage
+                min_diff = 100
+                closest_layout_r = None
+                for layout_result in tested_layouts:
+                    layout_coverage = self.realMetricCoverage(layout_result, self.metric_name)
+                    diff = abs(layout_coverage - self.metric_coverage)
+                    if diff < min_diff:
+                        min_diff = diff
+                        closest_layout_r = layout_result
+                layout = closest_layout_r['hugepages']
+                return layout, closest_layout_r
 
             last_base_layout = base_layout
             last_next_layout = next_layout
