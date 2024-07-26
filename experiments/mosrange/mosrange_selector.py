@@ -44,7 +44,7 @@ class MosrangeSelector(Selector):
         self.last_runtime_range = 0
         self.head_pages_coverage_threshold = 2
         self.num_initial_layouts = 0
-        rerun_modified_layouts = debug
+        rerun_modified_layouts = not debug
         super().__init__(
             memory_footprint_file,
             pebs_mem_bins_file,
@@ -836,33 +836,42 @@ class MosrangeSelector(Selector):
         right = sorted_initial_layouts[right_i]
         left_i = 0
         left = sorted_initial_layouts[left_i]
+        # (1) find surrounding initial layouts of the required coverage
         for i in range(len(sorted_initial_layouts)):
-            right_i = left_i
-            right = left
-            left_i = i
-            left = sorted_initial_layouts[i]
+            right_i, right = left_i, left
+            left_i, left = i, sorted_initial_layouts[i]
             left_pebs = self.pebsTlbCoverage(left)
             right_pebs = self.pebsTlbCoverage(right)
             if right_pebs <= self.metric_coverage <= left_pebs:
                 break
+
+        self.logger.info(f"find_surrounding_initial_layouts: select and run layout from a surrounding pair")
+        # (2) start from the found surrounding pair,
+        #     (a) select layout based on the required coverage
+        #     (b) run the selected layout
         layout_result = None
         while layout_result is None:
-            for offst in [(1,0), (0,1), (1,1)]:
+            Ri, Li = right_i, left_i
+            for (r_i, l_i) in [(1,0), (0,1), (1,1)]:
                 layout, layout_result = self.run_layout_from_virtual_surroundings(left, right)
                 if layout_result is not None:
                     break
-                if right_i == 0 and left_i == len(sorted_initial_layouts)-1:
-                    assert True
-                r_i, l_i = offst
-                right_i = max(0, right_i-r_i)
-                left_i = min(left_i+l_i, len(sorted_initial_layouts)-1)
-                right = sorted_initial_layouts[right_i]
-                left = sorted_initial_layouts[left_i]
+                Ri = max(0, right_i-r_i)
+                Li = min(left_i+l_i, len(sorted_initial_layouts)-1)
+                right = sorted_initial_layouts[Ri]
+                left = sorted_initial_layouts[Li]
+            right_i, left_i = Ri, Li
+            if right_i == 0 and left_i == len(sorted_initial_layouts)-1:
+                assert True
 
+        # (3) make sure that the run layout is within the required coverage
         misses_real_coverage = self.realMetricCoverage(layout_result, 'stlb_misses')
         if right_pebs <= misses_real_coverage <= left_pebs:
+            self.logger.info(f"find_surrounding_initial_layouts: the executed layout is within its surrounding pair")
             return left, right, layout, layout_result
 
+        self.logger.info(f"find_surrounding_initial_layouts: the executed layout is outside its surrounding pair!")
+        # (4) otherwise, start sliding right and left layouts gradually and repeat previous
         if right_pebs > misses_real_coverage:
             if right_i > 0:
                 right_i -= 1
@@ -871,9 +880,9 @@ class MosrangeSelector(Selector):
             if left_i < len(sorted_initial_layouts)-1:
                 left_i += 1
                 left = sorted_initial_layouts[left_i]
-        # if the layout does not fail between left and right
+        # if the layout does not fall between left and right
         # then we run the left and right layout and move them
-        # # according to their results
+        # according to their results
         right_result = self.run_next_layout(right)
         left_result = self.run_next_layout(left)
         right_real = self.realMetricCoverage(right_result)
@@ -886,6 +895,8 @@ class MosrangeSelector(Selector):
         init_layouts_real_coverage = [None] * len(sorted_initial_layouts)
         init_layouts_real_coverage[right_i] = right_real
         init_layouts_real_coverage[left_i] = left_real
+
+        self.logger.info(f"find_surrounding_initial_layouts: explore different surrounding pairs")
 
         while True:
             if right_real > self.metric_coverage:
@@ -916,6 +927,7 @@ class MosrangeSelector(Selector):
             if R is not None and L is not None:
                 left = sorted_initial_layouts[Li]
                 right = sorted_initial_layouts[Ri]
+                self.logger.info(f"find_surrounding_initial_layouts: found a surrounding pair")
                 return left, right, layout, layout_result
 
             if right_i == 0 and left_i == (len(sorted_initial_layouts)-1):
@@ -1074,13 +1086,15 @@ class MosrangeSelector(Selector):
             if layout_result is None:
                 layout, layout_result = self.remove_pages_to_find_desired_layout(base_layout_r, next_layout_r, beta)
 
-            tested_layouts.append(layout_result)
+            if layout_result is not None:
+                tested_layouts.append(layout_result)
             # limit the convergence processes to up to max_iterations trials
             if len(tested_layouts) > max_iterations:
                 # find closest layout to desired coverage
                 min_diff = 100
                 closest_layout_r = None
                 for layout_result in tested_layouts:
+                    assert layout_result is not None
                     layout_coverage = self.realMetricCoverage(layout_result, self.metric_name)
                     diff = abs(layout_coverage - self.metric_coverage)
                     if diff < min_diff:

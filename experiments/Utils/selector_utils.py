@@ -375,9 +375,10 @@ class Selector:
         return True
 
     def find_layout_results(self, layout):
-        if self.results_df is None or self.results_df.empty:
+        full_results_df, _ = self.collect_results(False)
+        if full_results_df is None or full_results_df.empty:
             return False, None
-        for index, row in self.results_df.iterrows():
+        for index, row in full_results_df.iterrows():
             prev_layout_hugepages = row['hugepages']
             if set(prev_layout_hugepages) == set(layout):
                 return True, row
@@ -420,7 +421,7 @@ class Selector:
         self.logger.info(f'\truntime={Utils.format_large_number(runtime)}')
         self.custom_log_layout_result(layout_res, old_result)
         # self.logger.info(f'\treal-coverage: {self.realMetricCoverage(layout_res, self.metric_name)}')
-        self.logger.info('===========================================')
+        self.logger.info('-------------------------------------------')
 
     def run_workload(self, mem_layout, layout_name):
         found, prev_res = self.layout_was_run(layout_name, mem_layout)
@@ -436,6 +437,7 @@ class Selector:
             if self.rerun_modified_layouts:
                 self.logger.warning(f'--- Overwriting {layout_name} and rerunning ---')
             else:
+                self.logger.warning(f'--- Skipping rerunning {layout_name} ---')
                 prev_mem_layout = prev_res['hugepages']
                 self.layouts.append(prev_mem_layout)
                 self.layout_names.append(layout_name)
@@ -447,6 +449,7 @@ class Selector:
             if found:
                 self.last_layout_num -= 1
                 # assert False
+                self.logger.warning(f'--- {layout_name} already exists but under different name [{prev_res["layout"]}]. ---')
                 return prev_res
 
         self.num_generated_layouts += 1
@@ -454,13 +457,17 @@ class Selector:
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_cmd = f'{self.run_experiment_cmd} {layout_name}'
 
-        self.logger.info('===========================================')
+        self.logger.info('=======================================================')
+        self.logger.info(f'==> start running {layout_name} (#{len(mem_layout)} hugepages)')
+
+        self.logger.info('------------------------------------------')
         self.logger.info(f'*** start running {out_dir} ***')
         self.logger.info(f'\t experiment: {self.exp_root_dir}')
         self.logger.info(f'\t layout: {layout_name}')
         self.logger.info(f'\t #hugepages: {len(mem_layout)}')
         self.logger.info(f'\t pebs-coverage: {round(self.pebsTlbCoverage(mem_layout), 2)}%')
         self.logger.debug(f'\t script: {run_cmd}')
+        self.logger.info('------------------------------------------')
 
         found_outliers = True
         while found_outliers:
@@ -478,17 +485,16 @@ class Selector:
             layout_res['pebs_coverage'] = self.pebsTlbCoverage(mem_layout)
             layout_res['real_coverage'] = self.realMetricCoverage(layout_res)
         self.log_layout_result(layout_res)
+
+        self.logger.info(f'<== completed running {layout_name}')
+        self.logger.info('=======================================================')
         return layout_res
 
     def run_next_layout(self, mem_layout):
         self.last_layout_num += 1
         layout_name = f'layout{self.last_layout_num}'
 
-        self.logger.info('=======================================================')
-        self.logger.info(f'==> start running {layout_name} (#{len(mem_layout)} hugepages)')
         last_result = self.run_workload(mem_layout, layout_name)
-        self.logger.info(f'<== completed running {layout_name}')
-        self.logger.info('=======================================================')
 
         return last_result
 
