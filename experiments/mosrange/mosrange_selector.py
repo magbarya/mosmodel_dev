@@ -826,129 +826,51 @@ class MosrangeSelector(Selector):
         return left, right
 
     def find_surrounding_initial_layouts(self, initial_layouts):
-        self.logger.debug(f"entry - find_surrounding_initial_layouts")
-        # sort layouts by their PEBS
-        sorted_initial_layouts = sorted(
-            initial_layouts, key=lambda layout: self.pebsTlbCoverage(layout)
-        )
-        right_i = 0
-        right = sorted_initial_layouts[right_i]
-        left_i = 0
-        left = sorted_initial_layouts[left_i]
-        # (1) find surrounding initial layouts of the required coverage
-        for i in range(len(sorted_initial_layouts)):
-            right_i, right = left_i, left
-            left_i, left = i, sorted_initial_layouts[i]
-            left_pebs = self.pebsTlbCoverage(left)
-            right_pebs = self.pebsTlbCoverage(right)
-            if right_pebs <= self.metric_coverage <= left_pebs:
+        def search_for_pair(candidate_results, target_coverage):
+            # Sort candidate results by real coverage each time a new layout is added
+            sorted_by_real = sorted(candidate_results, key=lambda x: x['real_coverage'])
+            for i in range(len(sorted_by_real) - 1):
+                lo = sorted_by_real[i]
+                hi = sorted_by_real[i + 1]
+                if lo['real_coverage'] <= target_coverage <= hi['real_coverage']:
+                    return True, lo['layout'], hi['layout']
+                if hi['real_coverage'] <= target_coverage <= lo['real_coverage']:
+                    return True, hi['layout'], lo['layout']
+            return False, None, None
+        
+        self.logger.debug("Starting to find surrounding layouts.")
+        
+        # Step 1: Sort layouts by their expected coverage
+        sorted_layouts = sorted(initial_layouts, key=lambda layout: self.pebsTlbCoverage(layout))
+        
+        # Step 2: Identify candidate pairs
+        for i in range(len(sorted_layouts) - 1):
+            lo_idx, hi_idx = i, i+1
+            lo = sorted_layouts[lo_idx]
+            hi = sorted_layouts[hi_idx]
+            if self.pebsTlbCoverage(lo) <= self.metric_coverage < self.pebsTlbCoverage(hi):
                 break
-
-        self.logger.info(f"find_surrounding_initial_layouts: select and run layout from a surrounding pair")
-        # (2) start from the found surrounding pair,
-        #     (a) select layout based on the required coverage
-        #     (b) run the selected layout
-        layout_result = None
-        while layout_result is None:
-            Ri, Li = right_i, left_i
-            for (r_i, l_i) in [(1,0), (0,1), (1,1)]:
-                layout, layout_result = self.run_layout_from_virtual_surroundings(left, right)
-                if layout_result is not None:
-                    break
-                Ri = max(0, right_i-r_i)
-                Li = min(left_i+l_i, len(sorted_initial_layouts)-1)
-                right = sorted_initial_layouts[Ri]
-                left = sorted_initial_layouts[Li]
-            right_i, left_i = Ri, Li
-            if right_i == 0 and left_i == len(sorted_initial_layouts)-1:
-                assert True
-
-        # (3) make sure that the run layout is within the required coverage
-        misses_real_coverage = self.realMetricCoverage(layout_result, 'stlb_misses')
-        if right_pebs <= misses_real_coverage <= left_pebs:
-            self.logger.info(f"find_surrounding_initial_layouts: the executed layout is within its surrounding pair")
-            return left, right, layout, layout_result
-
-        self.logger.info(f"find_surrounding_initial_layouts: the executed layout is outside its surrounding pair!")
-        # (4) otherwise, start sliding right and left layouts gradually and repeat previous
-        if right_pebs > misses_real_coverage:
-            if right_i > 0:
-                right_i -= 1
-                right = sorted_initial_layouts[right_i]
-        if left_pebs < misses_real_coverage:
-            if left_i < len(sorted_initial_layouts)-1:
-                left_i += 1
-                left = sorted_initial_layouts[left_i]
-        # if the layout does not fall between left and right
-        # then we run the left and right layout and move them
-        # according to their results
-        right_result = self.run_next_layout(right)
-        left_result = self.run_next_layout(left)
-        right_real = self.realMetricCoverage(right_result)
-        left_real = self.realMetricCoverage(left_result)
-        min_real = min(right_real, left_real)
-        max_real = max(right_real, left_real)
-        if min_real <= self.metric_coverage <= max_real:
-            return left, right, layout, layout_result
-
-        init_layouts_real_coverage = [None] * len(sorted_initial_layouts)
-        init_layouts_real_coverage[right_i] = right_real
-        init_layouts_real_coverage[left_i] = left_real
-
-        self.logger.info(f"find_surrounding_initial_layouts: explore different surrounding pairs")
-
-        while True:
-            if right_real > self.metric_coverage:
-                if right_i > 0:
-                    right_i -= 1
-                    right = sorted_initial_layouts[right_i]
-            if left_real < self.metric_coverage:
-                if left_i < len(sorted_initial_layouts)-1:
-                    left_i += 1
-                    left = sorted_initial_layouts[left_i]
-            if init_layouts_real_coverage[right_i] is None:
-                right_result = self.run_next_layout(right)
-                right_real = self.realMetricCoverage(right_result)
-                init_layouts_real_coverage[right_i] = right_real
-            if init_layouts_real_coverage[left_i] is None:
-                left_result = self.run_next_layout(left)
-                left_real = self.realMetricCoverage(left_result)
-                init_layouts_real_coverage[left_i] = left_real
-            find_surrounding_numbers = lambda lst, target: (
-                max(((num, idx) for idx, num in enumerate(lst) if num is not None and num < target), default=(None, None)),
-                min(((num, idx) for idx, num in enumerate(lst) if num is not None and num > target), default=(None, None))
-            )
-            # find_surrounding_numbers = lambda lst, target: (
-            #     max((num for num in lst if num is not None and num < target), default=None),
-            #     min((num for num in lst if num is not None and num > target), default=None)
-            # )
-            (R,Ri),(L,Li) = find_surrounding_numbers(init_layouts_real_coverage, self.metric_coverage)
-            if R is not None and L is not None:
-                left = sorted_initial_layouts[Li]
-                right = sorted_initial_layouts[Ri]
-                self.logger.info(f"find_surrounding_initial_layouts: found a surrounding pair")
-                return left, right, layout, layout_result
-
-            if right_i == 0 and left_i == (len(sorted_initial_layouts)-1):
-                for i in range(len(sorted_initial_layouts)):
-                    if init_layouts_real_coverage[i] is None:
-                        layout = sorted_initial_layouts[i]
-                        result = self.run_next_layout(layout)
-                        init_layouts_real_coverage[i] = result
-                        break
-        assert False
-
-    # def find_layout_results(self, layout):
-    #     pebs = self.pebsTlbCoverage(layout)
-    #     results = self.results_df.query(f'pebs_coverage == pebs')
-    #     if len(results) == 0:
-    #         return None
-    #     if len(results) == 1:
-    #         return results.iloc[0]
-    #     for index, row in results.iterrows():
-    #         if set(row['hugepages']) == set(layout):
-    #             return row
-    #     return None
+        
+        candidate_results = []
+        # Step 3: Verify candidate pairs with real coverages
+        for i in range(len(sorted_layouts) - 1):
+            lo_real_coverage = self.realMetricCoverage(self.run_next_layout(lo))
+            candidate_results.append({'layout': lo, 'real_coverage': lo_real_coverage})
+            found, candidate_lo, candidate_hi = search_for_pair(candidate_results, self.metric_coverage)
+            if found:
+                return candidate_hi, candidate_lo
+            
+            hi_real_coverage = self.realMetricCoverage(self.run_next_layout(hi))
+            candidate_results.append({'layout': hi, 'real_coverage': hi_real_coverage})
+            found, candidate_lo, candidate_hi = search_for_pair(candidate_results, self.metric_coverage)
+            if found:
+                return candidate_hi, candidate_lo
+            lo_idx = max(0, lo_idx - 1)
+            hi_idx = min(hi_idx - 1, len(sorted_layouts) - 1)
+            lo = sorted_layouts[lo_idx]
+            hi = sorted_layouts[hi_idx]
+            
+        assert True
 
     def add_pages_virtually_to_find_desired_layout(self, base_layout, add_working_set):
         self.logger.debug(f"entry - add_pages_virtually_to_find_desired_layout")
@@ -1045,11 +967,9 @@ class MosrangeSelector(Selector):
 
         tested_layouts = []
 
-        left, right, layout, layout_result = self.find_surrounding_initial_layouts(initial_layouts)
+        left, right = self.find_surrounding_initial_layouts(initial_layouts)
         assert left is not None
         assert right is not None
-        assert layout is not None
-        assert layout_result is not None
 
         right_r = self.run_next_layout(right)
         if self.is_result_within_target_range(right_r):
@@ -1072,6 +992,7 @@ class MosrangeSelector(Selector):
             next_layout = right
             next_layout_r = right_r
 
+        layout_result = None
         while not self.is_result_within_target_range(layout_result):
             alpha, beta, gamma, delta, U = self.get_working_sets(next_layout, base_layout)
 
