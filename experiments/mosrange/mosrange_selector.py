@@ -838,12 +838,12 @@ class MosrangeSelector(Selector):
                 if hi['real_coverage'] <= target_coverage <= lo['real_coverage']:
                     return True, hi['layout'], lo['layout']
             return False, None, None
-        
+
         self.logger.debug("Starting to find surrounding layouts.")
-        
+
         # Step 1: Sort layouts by their expected coverage
         sorted_layouts = sorted(initial_layouts, key=lambda layout: self.pebsTlbCoverage(layout))
-        
+
         # Step 2: Identify candidate pairs
         for i in range(len(sorted_layouts) - 1):
             lo_idx, hi_idx = i, i+1
@@ -851,7 +851,7 @@ class MosrangeSelector(Selector):
             hi = sorted_layouts[hi_idx]
             if self.pebsTlbCoverage(lo) <= self.metric_coverage < self.pebsTlbCoverage(hi):
                 break
-        
+
         candidate_results = []
         # Step 3: Verify candidate pairs with real coverages
         for i in range(len(sorted_layouts) - 1):
@@ -860,17 +860,17 @@ class MosrangeSelector(Selector):
             found, candidate_lo, candidate_hi = search_for_pair(candidate_results, self.metric_coverage)
             if found:
                 return candidate_hi, candidate_lo
-            
+
             hi_real_coverage = self.realMetricCoverage(self.run_next_layout(hi))
             candidate_results.append({'layout': hi, 'real_coverage': hi_real_coverage})
             found, candidate_lo, candidate_hi = search_for_pair(candidate_results, self.metric_coverage)
             if found:
                 return candidate_hi, candidate_lo
             lo_idx = max(0, lo_idx - 1)
-            hi_idx = min(hi_idx - 1, len(sorted_layouts) - 1)
+            hi_idx = min(hi_idx + 1, len(sorted_layouts) - 1)
             lo = sorted_layouts[lo_idx]
             hi = sorted_layouts[hi_idx]
-            
+
         assert True
 
     def add_pages_virtually_to_find_desired_layout(self, base_layout, add_working_set):
