@@ -430,9 +430,9 @@ class MosrangeSelector(Selector):
             return None, 0
         pages.sort()
         new_pebs_coverage = pebs_df.query(f"PAGE_NUMBER in {pages}")["TLB_COVERAGE"].sum()
-        
+
         return pages, new_pebs_coverage
-        
+
     def get_complement_surrounding_layouts(self, layout, layout_result):
         layout_real_coverage = self.realMetricCoverage(layout_result)
         alpha = set(layout)
@@ -442,7 +442,7 @@ class MosrangeSelector(Selector):
         beta_df = self.pebs_df.query(f'PAGE_NUMBER in {beta}')
         beta_pebs = self.pebsTlbCoverage(beta_layout)
         left_pebs_coverage = min(self.metric_coverage + 10, (100 + self.metric_coverage) / 2)
-        
+
         res_layouts = []
         if beta_pebs >= left_pebs_coverage:
             new_layout, new_pebs = self.find_layout(self, beta_df, left_pebs_coverage, epsilon=0.2, hot_to_cold=True)
@@ -453,14 +453,14 @@ class MosrangeSelector(Selector):
         else:
             new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage)
         assert new_layout is not None
-        
+
         res_layouts.append(new_layout)
-        
+
         new_layout_result = self.run_next_layout(new_layout)
         new_layout_real_coverage = self.realMetricCoverage(new_layout_result)
-        
+
         if new_layout_real_coverage > layout_real_coverage:
-            # the new layout fall at left side, then we can take off some pages 
+            # the new layout fall at left side, then we can take off some pages
             # from it to get a new layout at the right of the base layout
             for i in range(1, 10):
                 expected_pebs = max(0, new_pebs - (10*i))
@@ -489,7 +489,7 @@ class MosrangeSelector(Selector):
                     break
         assert len(res_layouts) == 2
         return res_layouts
-        
+
 
     def get_moselect_init_layouts_C2H_L2S(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -518,7 +518,7 @@ class MosrangeSelector(Selector):
         buckets_weights = [52, 26, 13, 6.5]
         group = self.fillBuckets(pebs_df, buckets_weights)
         return self.createSubgroups(group)
-    
+
     def get_moselect_init_layouts(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
         # desired weights for each group layout
@@ -614,11 +614,11 @@ class MosrangeSelector(Selector):
         min_pebs = min(base_pebs, next_pebs)
         max_pebs = max(base_pebs, next_pebs)
         assert min_real <= real_coverage <= max_real
-        
+
         # handle corner case to prevent division by zero
         if (max_real - min_real) == 0:
             return min_pebs + (real_coverage - min_real)
-                        
+
         # case 1) handle adding pages to base layout
         if base_pebs <= next_pebs:
             # Calculate the proportion between the previous and next real values
@@ -995,16 +995,16 @@ class MosrangeSelector(Selector):
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - add_pages_virtually_to_find_desired_layout --> None")
                 return None, None
-            
+
             layout_result = self.run_next_layout(layout)
             if self.is_result_within_target_range(layout_result):
                 self.logger.debug(f"exit - add_pages_virtually_to_find_desired_layout() --> layout:#{len(layout)} pages")
                 return layout, layout_result
-            
+
             num_layouts_after = self.last_layout_num
             num_explored_layouts = num_layouts_after - num_layouts_before
             self.logger.info(f"add_pages_virtually_to_find_desired_layout: explored and run {num_explored_layouts} layouts so far")
-            
+
             base_pebs = self.pebsTlbCoverage(base_layout)
             last_real_coverage = self.realMetricCoverage(layout_result)
             if last_real_coverage < self.metric_coverage:
@@ -1030,16 +1030,16 @@ class MosrangeSelector(Selector):
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - add_pages_to_find_desired_layout() --> None")
                 return None, None
-            
+
             layout_result = self.run_next_layout(layout)
             if self.is_result_within_target_range(layout_result):
                 self.logger.debug(f"exit - add_pages_to_find_desired_layout() --> layout:#{len(layout)} pages")
                 return layout, layout_result
-            
+
             num_layouts_after = self.last_layout_num
             num_explored_layouts = num_layouts_after - num_layouts_before
             self.logger.info(f"add_pages_to_find_desired_layout: explored and run {num_explored_layouts} layouts so far")
-            
+
             base_pebs = self.pebsTlbCoverage(base_layout)
             last_pebs_step = expected_pebs - base_pebs
             base_real_coverage = self.realMetricCoverage(base_layout_r)
@@ -1070,16 +1070,16 @@ class MosrangeSelector(Selector):
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - remove_pages_to_find_desired_layout() --> None")
                 return None, None
-            
+
             layout_result = self.run_next_layout(layout)
             if self.is_result_within_target_range(layout_result):
                 self.logger.debug(f"exit - remove_pages_to_find_desired_layout() --> layout:#{len(layout)} pages")
                 return layout, layout_result
-            
+
             num_layouts_after = self.last_layout_num
             num_explored_layouts = num_layouts_after - num_layouts_before
             self.logger.info(f"remove_pages_to_find_desired_layout: explored and run {num_explored_layouts} layouts so far")
-            
+
             base_pebs = self.pebsTlbCoverage(base_layout)
             last_pebs_step = base_pebs - expected_pebs
             base_real_coverage = self.realMetricCoverage(base_layout_r)
@@ -1193,7 +1193,7 @@ class MosrangeSelector(Selector):
                 closest_layout_r = layout_result
         layout = closest_layout_r['hugepages']
         return layout, closest_layout_r
-    
+
     def full_run(self):
         self.log_metadata()
 
@@ -1287,13 +1287,12 @@ class MosrangeSelector(Selector):
         with open(self.log_file_path, 'a+') as f:
             f.write(msg)
             f.write('\n')
-    
+
     layout_group = 0
     def run_with_custom_init_layouts(self, initial_layouts, shake_budget=5, group_details="N/A", first_group=False):
-        global layout_group        
-        layout_name = f'Layout{string.ascii_uppercase[layout_group]}'
-        layout_group += 1
-        
+        layout_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
+        MosrangeSelector.layout_group += 1
+
         if first_group:
             self.log(f"points_group,layout_name")
         self.log(f"group_details,{group_details}")
@@ -1308,13 +1307,13 @@ class MosrangeSelector(Selector):
         #     layout_result = self.run_next_layout(layout)
         # else:
         #     layout, layout_result = self.find_desired_layout(initial_layouts)
-        
+
         layout, layout_result = self.find_desired_layout(initial_layouts)
         self.log(f"{layout_name},layout{self.last_layout_num}")
         self.logger.info(f"<== {layout_name}: Finished converging")
         self.logger.info("=====================================================")
         converged_layout, converged_layout_r = self.find_closest_layout_to_required_coverage()
-        
+
         self.logger.info("=====================================================")
         self.logger.info(f"Running {layout_name} with zero pages")
         self.logger.info("=====================================================")
@@ -1322,7 +1321,7 @@ class MosrangeSelector(Selector):
         layout_zeroes = list(set(converged_layout) | set(tail_pages))
         converged_layout_with_zeroes_r = self.run_next_layout(layout_zeroes)
         self.log(f"{layout_name}_with_zeroes,layout{self.last_layout_num}")
-        
+
         if first_group:
             layout, layout_result = self.find_closest_layout_to_required_coverage()
             if not self.is_result_within_target_range(layout_result):
@@ -1339,7 +1338,7 @@ class MosrangeSelector(Selector):
         self.log(f"{layout_name}_end_shake_runtime,layout{self.last_layout_num}")
         self.logger.info(f"<== {layout_name}: Finished shaking runtime")
         self.logger.info("=====================================================")
-        
+
         return converged_layout_r, converged_layout_with_zeroes_r
 
     def run_with_different_init_layouts(self):
@@ -1350,10 +1349,10 @@ class MosrangeSelector(Selector):
 
         shake_budget = max(self.num_layouts//6, 5)
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
-                
+
         initial_layouts = self.get_moselect_init_layouts()
         layout, layout_r = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
-        
+
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="complement moselect")
 
