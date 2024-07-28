@@ -606,8 +606,10 @@ class MosrangeSelector(Selector):
     def calc_pebs_coverage_proportion(self, base_layout_r, next_layout_r):
         base_real = self.realMetricCoverage(base_layout_r)
         next_real = self.realMetricCoverage(next_layout_r)
-        base_pebs = self.pebsTlbCoverage(base_layout_r)
-        next_pebs = self.pebsTlbCoverage(next_layout_r)
+        base_layout = base_layout_r['hugepages']
+        next_layout = next_layout_r['hugepages']
+        base_pebs = self.pebsTlbCoverage(base_layout)
+        next_pebs = self.pebsTlbCoverage(next_layout)
         real_coverage = self.metric_coverage
         min_real = min(base_real, next_real)
         max_real = max(base_real, next_real)
