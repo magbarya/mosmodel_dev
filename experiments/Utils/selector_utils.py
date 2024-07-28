@@ -433,6 +433,14 @@ class Selector:
             self.log_layout_result(prev_res, True)
             return prev_res
         elif not found and prev_res is not None:
+            found_content, content_prev_res = self.find_layout_results(mem_layout)
+            # if the layout was found but under different layout_name
+            if found_content:
+                self.last_layout_num -= 1
+                # assert False
+                self.logger.warning(f'--- {layout_name} already exists but under different name [{content_prev_res["layout"]}]. ---')
+                return content_prev_res
+
             self.logger.warning(f'--- {layout_name} already exists but its content is changed. ---')
             if self.rerun_modified_layouts:
                 self.logger.warning(f'--- Overwriting {layout_name} and rerunning ---')
@@ -442,14 +450,6 @@ class Selector:
                 self.layouts.append(prev_mem_layout)
                 self.layout_names.append(layout_name)
                 self.log_layout_result(prev_res, True)
-                return prev_res
-        else: # layout_name was not found
-            found, prev_res = self.find_layout_results(mem_layout)
-            # if the layout was found but under different layout_name
-            if found:
-                self.last_layout_num -= 1
-                # assert False
-                self.logger.warning(f'--- {layout_name} already exists but under different name [{prev_res["layout"]}]. ---')
                 return prev_res
 
         self.num_generated_layouts += 1
