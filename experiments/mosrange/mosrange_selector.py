@@ -461,8 +461,8 @@ class MosrangeSelector(Selector):
             if new_layout is None:
                 self.logger.warning(f"get_complement_surrounding_layouts: using head pages to select layout based on beta pages")
                 new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=False)
+        
         assert new_layout is not None
-
         res_layouts.append(new_layout)
 
         new_layout_result = self.run_next_layout(new_layout)
@@ -474,7 +474,7 @@ class MosrangeSelector(Selector):
             for i in range(1, 10):
                 expected_pebs = max(0, new_pebs - (10*i))
                 right_layout, right_pebs = self.remove_pages_in_order(new_layout, None, expected_pebs)
-                if right_layout is not None:
+                if right_layout is None:
                     continue
                 right_layout_result = self.run_next_layout(right_layout)
                 right_layout_real = self.realMetricCoverage(right_layout_result)
@@ -487,9 +487,9 @@ class MosrangeSelector(Selector):
             for i in range(1, 10):
                 expected_pebs = min(100, new_pebs + (10*i))
                 left_layout, left_pebs = self.add_pages_to_base_layout(new_layout, alpha_layout, None, expected_pebs)
-                if left_layout is not None:
+                if left_layout is None:
                     left_layout, left_pebs = self.add_pages_to_base_layout(new_layout, self.all_pebs_pages_layout, None, expected_pebs)
-                    if left_layout is not None:
+                    if left_layout is None:
                         continue
                 left_layout_result = self.run_next_layout(left_layout)
                 left_layout_real = self.realMetricCoverage(left_layout_result)
