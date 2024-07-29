@@ -1402,8 +1402,9 @@ class MosrangeSelector(Selector):
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
         initial_layouts = self.get_moselect_init_layouts()
-        layout, layout_r = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
+        layout_r, layout_with_zeroes_r = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
 
+        layout = layout_r['hugepages']
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="complement moselect")
 
