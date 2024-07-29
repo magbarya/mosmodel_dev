@@ -630,7 +630,7 @@ class MosrangeSelector(Selector):
             step = abs(proportion * (max_pebs - min_pebs))
             expected_pebs = min_pebs + step
         # case 2) handle removing pages from next layout
-        if base_pebs > next_pebs:
+        else: # base_pebs > next_pebs:
             # Calculate the proportion between the previous and next real values
             proportion = (max_real - real_coverage) / (max_real - min_real)
             # Calculate the expected value using linear interpolation
@@ -1187,7 +1187,7 @@ class MosrangeSelector(Selector):
         results_df, _ = self.collect_results()
         min_diff = 100
         closest_layout_r = None
-        for layout_result in results_df:
+        for index, layout_result in results_df.iterrows():
             assert layout_result is not None
             layout_coverage = self.realMetricCoverage(layout_result)
             diff = abs(layout_coverage - self.metric_coverage)
