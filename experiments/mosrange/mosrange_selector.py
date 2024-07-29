@@ -1372,13 +1372,18 @@ class MosrangeSelector(Selector):
             layout, layout_result = self.find_closest_layout_to_required_coverage()
             if not self.is_result_within_target_range(layout_result):
                 # update metric_coverage to the one got by the executed layout to save convergence time
+                prev_coverage = self.metric_coverage
+                prev_val = self.metric_val
                 real_coverage = self.realMetricCoverage(layout_result)
                 self.metric_coverage = real_coverage
                 self.metric_val = None
                 self.update_metric_values()
+                self.logger.info(f">>> Updating required coverage of {self.metric_name}: <<<")
+                self.logger.info(f"\t>>> from: [{Utils.format_large_number(prev_val)} , {prev_coverage}%] <<<")
+                self.logger.info(f"\t>>> to  : [{Utils.format_large_number(self.metric_val)} , {self.metric_coverage}%] <<<")
 
         self.logger.info("=====================================================")
-        self.logger.info(f"==> {layout_name}: Starting shaking runtime")
+        self.logger.info(f"==> {layout_name}: Start shaking runtime")
         self.log(f"{layout_name}_start_shake_runtime,layout{self.last_layout_num+1}")
         self.shake_runtime(layout, shake_budget)
         self.log(f"{layout_name}_end_shake_runtime,layout{self.last_layout_num}")
