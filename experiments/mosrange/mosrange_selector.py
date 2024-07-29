@@ -441,7 +441,7 @@ class MosrangeSelector(Selector):
         alpha_layout = list(alpha)
         beta = set(self.all_pebs_pages_layout) - alpha
         beta_layout = list(beta)
-        beta_df = self.pebs_df.query(f'PAGE_NUMBER in {beta}')
+        beta_df = self.pebs_df.query(f'PAGE_NUMBER in {beta_layout}')
         beta_pebs = self.pebsTlbCoverage(beta_layout)
         left_pebs_coverage = min(self.metric_coverage + 10, (100 + self.metric_coverage) / 2)
 
@@ -449,7 +449,7 @@ class MosrangeSelector(Selector):
         if beta_pebs >= left_pebs_coverage:
             new_layout, new_pebs = self.find_layout(self, beta_df, left_pebs_coverage, epsilon=0.2, hot_to_cold=True)
             if new_layout is None:
-                alpha_df = self.pebs_df.query(f'PAGE_NUMBER in {alpha}')
+                alpha_df = self.pebs_df.query(f'PAGE_NUMBER in {alpha_layout}')
                 pebs_df = pd.concat([beta_df, alpha_df], ignore_index=True)
                 new_layout, new_pebs = self.find_layout(self, pebs_df, left_pebs_coverage, epsilon=1, hot_to_cold=None)
         else:
@@ -1334,40 +1334,40 @@ class MosrangeSelector(Selector):
             f.write('\n')
 
     layout_group = 0
-    def run_with_custom_init_layouts(self, initial_layouts, shake_budget=5, group_details="N/A", first_group=False):
-        layout_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
+    def run_with_custom_init_layouts(
+        self, 
+        initial_layouts, 
+        shake_budget=5, 
+        group_details="N/A", 
+        first_group=False, 
+        skip_first_group_convergence=False
+        ):
+        layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
         MosrangeSelector.layout_group += 1
 
         if first_group:
             self.log(f"points_group,layout_name", True)
         self.log(f"group_details,{group_details}")
 
+        start_layout_name = f"layout{self.last_layout_num+1}"
+        self.log(f"{layout_group_name}_start_converge,{start_layout_name}")
         self.logger.info("=====================================================")
-        self.logger.info(f"==> {layout_name}: Starting converging")
-        self.log(f"{layout_name}_start_converge,layout{self.last_layout_num+1}")
+        self.logger.info(f"==> {layout_group_name}: Starting converging")
 
-        # if first_group:
-        #     left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
-        #     layout = self.select_layout_from_endpoints(left, right)
-        #     layout_result = self.run_next_layout(layout)
-        # else:
-        #     layout, layout_result = self.find_desired_layout(initial_layouts)
+        if first_group and skip_first_group_convergence:
+            left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
+            layout = self.select_layout_from_endpoints(left, right)
+            layout_result = self.run_next_layout(layout)
+        else:
+            layout, layout_result = self.find_desired_layout(initial_layouts)
 
-        layout, layout_result = self.find_desired_layout(initial_layouts)
-        self.log(f"{layout_name},layout{self.last_layout_num}")
-        self.logger.info(f"<== {layout_name}: Finished converging")
+        self.logger.info(f"<== {layout_group_name}: Finished converging")
         self.logger.info("=====================================================")
-        converged_layout, converged_layout_r = self.find_closest_layout_to_required_coverage()
-
-        self.logger.info("=====================================================")
-        self.logger.info(f"Running {layout_name} with zero pages")
-        self.logger.info("=====================================================")
-        tail_pages = self.get_tail_pages(total_threshold=1)
-        layout_zeroes = list(set(converged_layout) | set(tail_pages))
-        converged_layout_with_zeroes_r = self.run_next_layout(layout_zeroes)
-        self.log(f"{layout_name}_with_zeroes,layout{self.last_layout_num}")
-
-        if first_group:
+        end_layout_name = f"layout{self.last_layout_num}"
+        self.log(f"{layout_group_name},{end_layout_name}")
+        
+        # update required coverage in case we failed to converge in the first group
+        if first_group and not self.is_result_within_target_range(layout_result):
             layout, layout_result = self.find_closest_layout_to_required_coverage()
             if not self.is_result_within_target_range(layout_result):
                 # update metric_coverage to the one got by the executed layout to save convergence time
@@ -1380,16 +1380,28 @@ class MosrangeSelector(Selector):
                 self.logger.info(f">>> Updating required coverage of {self.metric_name}: <<<")
                 self.logger.info(f"\t>>> from: [{Utils.format_large_number(prev_val)} , {prev_coverage}%] <<<")
                 self.logger.info(f"\t>>> to  : [{Utils.format_large_number(self.metric_val)} , {self.metric_coverage}%] <<<")
+                
+        closest_layout_name = layout_result['layout']
+        self.log(f"{layout_group_name}_converged,{closest_layout_name}")
 
         self.logger.info("=====================================================")
-        self.logger.info(f"==> {layout_name}: Start shaking runtime")
-        self.log(f"{layout_name}_start_shake_runtime,layout{self.last_layout_num+1}")
+        self.logger.info(f"Running {layout_group_name} with zero pages")
+        self.logger.info("=====================================================")
+        tail_pages = self.get_tail_pages(total_threshold=1)
+        layout_zeroes = list(set(layout) | set(tail_pages))
+        converged_layout_with_zeroes_r = self.run_next_layout(layout_zeroes)
+        layout_name = converged_layout_with_zeroes_r['layout']
+        self.log(f"{layout_group_name}_with_zeroes,{layout_name}")        
+
+        self.log(f"{layout_group_name}_start_shake_runtime,layout{self.last_layout_num+1}")
+        self.logger.info("=====================================================")
+        self.logger.info(f"==> {layout_group_name}: Start shaking runtime")
         self.shake_runtime(layout, shake_budget)
-        self.log(f"{layout_name}_end_shake_runtime,layout{self.last_layout_num}")
-        self.logger.info(f"<== {layout_name}: Finished shaking runtime")
+        self.logger.info(f"<== {layout_group_name}: Finished shaking runtime")
         self.logger.info("=====================================================")
+        self.log(f"{layout_group_name}_end_shake_runtime,layout{self.last_layout_num}")
 
-        return converged_layout_r, converged_layout_with_zeroes_r
+        return layout_result, converged_layout_with_zeroes_r
 
     def run_with_different_init_layouts(self):
         self.log_metadata()
@@ -1401,7 +1413,7 @@ class MosrangeSelector(Selector):
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
         initial_layouts = self.get_moselect_init_layouts()
-        layout_r, layout_with_zeroes_r = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
+        layout_r, _ = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
 
         layout = layout_r['hugepages']
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
