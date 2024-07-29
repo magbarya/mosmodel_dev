@@ -1310,6 +1310,10 @@ class MosrangeSelector(Selector):
 
     def backup_and_truncate_log(self):
         file_path = self.log_file_path
+        # Check if the file exists
+        if not os.path.exists(file_path):
+            return
+    
         # Append a date-time suffix to the filename for the backup
         date_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_file = f"{file_path}_{date_suffix}"
