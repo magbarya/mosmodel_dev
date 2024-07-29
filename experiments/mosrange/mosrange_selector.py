@@ -8,6 +8,8 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 import string
+import shutil
+from datetime import datetime
 
 curr_file_dir = os.path.dirname(os.path.abspath(__file__))
 experiments_root_dir = os.path.join(curr_file_dir, "..")
@@ -1306,8 +1308,24 @@ class MosrangeSelector(Selector):
         )
         # MosrangeSelector.pause()
 
-    def log(self, msg):
-        with open(self.log_file_path, 'a+') as f:
+    def backup_and_truncate_log(self):
+        file_path = self.log_file_path
+        # Append a date-time suffix to the filename for the backup
+        date_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
+        backup_file = f"{file_path}_{date_suffix}"
+
+        # Copy the original file to the backup file
+        shutil.copy(file_path, backup_file)
+
+        # Truncate the original file
+        with open(file_path, 'w') as file:
+            pass  # Opening in 'w' mode truncates the file
+    
+    def log(self, msg, truncate=False):
+        if truncate:
+            self.backup_and_truncate_log()
+        
+        with open(self.log_file_path, 'a') as f:
             f.write(msg)
             f.write('\n')
 
@@ -1317,7 +1335,7 @@ class MosrangeSelector(Selector):
         MosrangeSelector.layout_group += 1
 
         if first_group:
-            self.log(f"points_group,layout_name")
+            self.log(f"points_group,layout_name", True)
         self.log(f"group_details,{group_details}")
 
         self.logger.info("=====================================================")
