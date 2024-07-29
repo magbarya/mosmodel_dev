@@ -455,6 +455,9 @@ class MosrangeSelector(Selector):
                 new_layout, new_pebs = self.find_layout(self, pebs_df, left_pebs_coverage, epsilon=1, hot_to_cold=None)
         else:
             new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage)
+            if new_layout is None:
+                self.logger.warning(f"get_complement_surrounding_layouts: using head pages to select layout based on beta pages")
+                new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=False)
         assert new_layout is not None
 
         res_layouts.append(new_layout)
