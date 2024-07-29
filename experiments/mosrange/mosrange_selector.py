@@ -458,10 +458,14 @@ class MosrangeSelector(Selector):
                 pebs_df = pd.concat([beta_df, alpha_df], ignore_index=True)
                 new_layout, new_pebs = self.find_layout(self, pebs_df, left_pebs_coverage, epsilon=1, hot_to_cold=None)
         else:
-            new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage)
+            new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=False)
             if new_layout is None:
-                self.logger.warning(f"get_complement_surrounding_layouts: using head pages to select layout based on beta pages")
-                new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=False)
+                alpha_df = self.pebs_df.query(f'PAGE_NUMBER in {alpha_layout} and TLB_COVERAGE > 0.01')
+                filtered_alpha_layout = list(set(alpha_df['PAGE_NUMBER'].tolist()))
+                new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, filtered_alpha_layout, None, left_pebs_coverage, tail=True)
+                if new_layout is None:
+                    self.logger.warning(f"get_complement_surrounding_layouts: using tail pages to select layout based on beta pages")
+                    new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=True)
         
         assert new_layout is not None
         res_layouts.append(new_layout)
@@ -474,7 +478,7 @@ class MosrangeSelector(Selector):
             # from it to get a new layout at the right of the base layout
             for i in range(1, 10):
                 expected_pebs = max(0, new_pebs - (10*i))
-                right_layout, right_pebs = self.remove_pages_in_order(new_layout, None, expected_pebs)
+                right_layout, _ = self.remove_pages_in_order(new_layout, None, expected_pebs)
                 if right_layout is None:
                     continue
                 right_layout_result = self.run_next_layout(right_layout)
@@ -487,11 +491,21 @@ class MosrangeSelector(Selector):
             # to it from alpha set
             for i in range(1, 10):
                 expected_pebs = min(100, new_pebs + (10*i))
-                left_layout, left_pebs = self.add_pages_to_base_layout(new_layout, alpha_layout, None, expected_pebs)
+                # 1st trial: use alpha pages in hot->cold order
+                left_layout, _ = self.add_pages_to_base_layout(new_layout, alpha_layout, None, expected_pebs, tail=False)
                 if left_layout is None:
-                    left_layout, left_pebs = self.add_pages_to_base_layout(new_layout, self.all_pebs_pages_layout, None, expected_pebs)
+                    non_zero_df = self.pebs_df.query(f'TLB_COVERAGE > 0.01')
+                    non_zero_pages = list(set(non_zero_df['PAGE_NUMBER'].tolist()))
+                    # 2nd trial: use all non-zero pages in hot->cold order
+                    left_layout, _ = self.add_pages_to_base_layout(new_layout, non_zero_pages, None, expected_pebs, tail=False)
                     if left_layout is None:
-                        continue
+                        # 3rd trial: use all non-zero pages in cold->hot order
+                        left_layout, _ = self.add_pages_to_base_layout(new_layout, non_zero_pages, None, expected_pebs, tail=True)
+                        if left_layout is None:
+                            # 4th trial: use all pages in cold->hot order
+                            left_layout, _ = self.add_pages_to_base_layout(new_layout, self.all_pebs_pages_layout, None, expected_pebs)
+                if left_layout is None:
+                    continue
                 left_layout_result = self.run_next_layout(left_layout)
                 left_layout_real = self.realMetricCoverage(left_layout_result)
                 if left_layout_real >= layout_real_coverage:
@@ -1358,7 +1372,7 @@ class MosrangeSelector(Selector):
 
         if first_group:
             self.log(f"points_group,layout_name", True)
-        self.log(f"group_details,{group_details}")
+        self.log(f"{layout_group_name}_group_details,{group_details}")
 
         start_layout_name = f"layout{self.last_layout_num+1}"
         self.log(f"{layout_group_name}_start_converge,{start_layout_name}")
