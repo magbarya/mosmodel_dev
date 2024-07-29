@@ -1024,9 +1024,10 @@ class MosrangeSelector(Selector):
 
         num_layouts_before = self.last_layout_num
 
-        assert self.realMetricCoverage(next_layout_r) > self.realMetricCoverage(base_layout_r)
+        assert self.realMetricCoverage(next_layout_r) > self.metric_coverage > self.realMetricCoverage(base_layout_r)
         base_layout = base_layout_r['hugepages']
         expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
+        prev_real = None
         while True:
             layout, pebs = self.add_pages_to_base_layout(base_layout, add_working_set, remove_working_set, expected_pebs)
             if layout is None or self.layout_exist(layout):
@@ -1045,8 +1046,27 @@ class MosrangeSelector(Selector):
             base_pebs = self.pebsTlbCoverage(base_layout)
             last_pebs_step = expected_pebs - base_pebs
             base_real_coverage = self.realMetricCoverage(base_layout_r)
+            if prev_real is None:
+                prev_real = base_real_coverage
             next_real_coverage = self.realMetricCoverage(next_layout_r)
             last_real_coverage = self.realMetricCoverage(layout_result)
+            expected_increment = self.metric_coverage - base_real_coverage
+            epsilon = max(5, expected_increment / 2)
+
+            if self.metric_coverage > last_real_coverage:
+                # case 1) minor real increment or decrement
+                if abs(last_real_coverage - prev_real) <= epsilon:
+                    expected_pebs = base_pebs + (last_pebs_step * 1.5)
+                    expected_pebs = min(100, expected_pebs)
+                    continue
+            else:
+                # case 2) major real increment
+                if abs(last_real_coverage - prev_real) > epsilon:
+                    expected_pebs = base_pebs + (last_pebs_step * 0.7)
+                    expected_pebs = min(100, expected_pebs)
+                    continue
+            prev_real = last_real_coverage
+            '''
             if (last_real_coverage - base_real_coverage) < last_pebs_step:
                 expected_pebs = (last_pebs_step * 1.5) + expected_pebs
                 expected_pebs = min(100, expected_pebs)
@@ -1055,7 +1075,8 @@ class MosrangeSelector(Selector):
                 expected_pebs = expected_pebs - (last_real_coverage - next_real_coverage) * 1.5
                 expected_pebs = max(0, expected_pebs)
                 continue
-            if next_real_coverage >= last_real_coverage >= base_real_coverage:
+            '''
+            if self.metric_coverage >= last_real_coverage >= base_real_coverage:
                 base_layout_r = layout_result
             expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
 
@@ -1095,7 +1116,7 @@ class MosrangeSelector(Selector):
                 expected_pebs = expected_pebs + (next_real_coverage - last_real_coverage) * 1.5
                 expected_pebs = min(100, expected_pebs)
                 continue
-            if next_real_coverage <= last_real_coverage <= base_real_coverage:
+            if self.metric_coverage <= last_real_coverage <= base_real_coverage:
                 base_layout_r = layout_result
             expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
 
