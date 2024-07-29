@@ -695,6 +695,9 @@ class MosrangeSelector(Selector):
             # then remove the page with least coverage and try again
             tmp_base_layout.remove(rp)
 
+        if remove_pages_subset is None or not remove_pages_subset or len(remove_pages_subset) == 0:
+            pages, pebs_coverage = self.add_pages_from_working_set(
+                base_layout_pages, add_working_set, desired_pebs_coverage, tail, threshold)
         if pages is None or self.layout_exist(pages):
             return None, 0
 
