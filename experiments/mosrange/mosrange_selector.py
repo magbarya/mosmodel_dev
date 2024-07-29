@@ -298,6 +298,8 @@ class MosrangeSelector(Selector):
                 return
             if not left_in_range:
                 search(left, mid)
+            if iterations > max_iterations:
+                return
 
             right_in_range = evaluate_subset(right_subset, zero_pages)
             if right_in_range:
@@ -307,6 +309,8 @@ class MosrangeSelector(Selector):
                 return
             if not right_in_range:
                 search(mid, right)
+            if iterations > max_iterations:
+                return
 
             if left_in_range and right_in_range:
                 return
