@@ -38,6 +38,7 @@ class Selector:
         self.num_generated_layouts = 0
         self.layouts = []
         self.layout_names = []
+        self.budget = None
         self.logger = logging.getLogger(__name__)
         self.all_2mb_r = None
         self.all_4kb_r = None
@@ -504,4 +505,22 @@ class Selector:
             r = self.run_next_layout(l)
             results_df = results_df.append(r)
         return results_df
-
+    
+    def reset_budget(self, new_budget):
+        self.num_generated_layouts = 0
+        self.budget = new_budget
+    
+    def disable_budget(self):
+        self.budget = None
+        
+    def has_budget(self):
+        if self.budget is None:
+            return True
+        remaining_budget = self.get_remaining_budget()
+        return remaining_budget > 0
+    
+    def consumed_budget(self):
+        return not self.has_budget()
+    
+    def get_remaining_budget(self):
+        return self.budget - self.num_generated_layouts
