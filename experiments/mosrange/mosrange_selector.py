@@ -69,8 +69,8 @@ class MosrangeSelector(Selector):
         self.debug = debug
 
         current_file_path = Path(__file__).resolve()
-        current_directory = current_file_path.parent
-        self.log_file_path = current_directory / "log.csv"
+        self.current_directory = current_file_path.parent
+        self.log_file_path = self.current_directory / "log.csv"
 
     def update_metric_values(self):
         if self.metric_val is None:
@@ -1238,7 +1238,8 @@ class MosrangeSelector(Selector):
         return layout, layout_result
 
     def find_closest_layout_to_required_coverage(self):
-        results_df, _ = self.collect_results()
+        results_df, _ = self.collect_results(False)
+        results_df = results_df.query(f'layout in {self.phase_layout_names}')
         min_diff = 100
         closest_layout_r = None
         for index, layout_result in results_df.iterrows():
@@ -1340,8 +1341,7 @@ class MosrangeSelector(Selector):
         )
         # MosrangeSelector.pause()
 
-    def backup_and_truncate_log(self):
-        file_path = self.log_file_path
+    def backup_and_truncate_log(self, file_path):
         # Check if the file exists
         if not os.path.exists(file_path):
             return
@@ -1357,11 +1357,29 @@ class MosrangeSelector(Selector):
         with open(file_path, 'w') as file:
             pass  # Opening in 'w' mode truncates the file
     
-    def log(self, msg, truncate=False):
+    def log(self, key, val, truncate=False):
         if truncate:
-            self.backup_and_truncate_log()
+            self.backup_and_truncate_log(self.log_file_path)        
         
+        msg = f"{key},{val}"
         with open(self.log_file_path, 'a') as f:
+            f.write(msg)
+            f.write('\n')        
+    
+    def log_layouts(self, key, truncate=False):
+        log_file_path = self.current_directory / "layouts_log.csv"
+        if truncate:
+            self.backup_and_truncate_log(log_file_path)
+        
+        # starting new group
+        if truncate or 'group_details' in key:
+            self.init_group_layouts = []
+        curr_phase_group_layouts = list(set(self.phase_layout_names) - set(self.init_group_layouts))
+        self.init_group_layouts += curr_phase_group_layouts
+        
+        val = str(curr_phase_group_layouts)
+        msg = f"{key},{val}"
+        with open(log_file_path, 'a') as f:
             f.write(msg)
             f.write('\n')
 
@@ -1377,12 +1395,14 @@ class MosrangeSelector(Selector):
         layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
         MosrangeSelector.layout_group += 1
 
+        self.reset_phase_layout_names()
         if first_group:
-            self.log(f"points_group,layout_name", True)
-        self.log(f"{layout_group_name}_group_details,{group_details}")
+            self.log(f"points_group", "layout_name", True)
+        self.log(f"{layout_group_name}_group_details", group_details)
 
-        start_layout_name = f"layout{self.last_layout_num+1}"
-        self.log(f"{layout_group_name}_start_converge,{start_layout_name}")
+        start_layout_num = self.last_layout_num+1
+        start_layout_name = f"layout{start_layout_num}"
+        self.log(f"{layout_group_name}_start_converge" ,start_layout_name)
         self.logger.info("=====================================================")
         self.logger.info(f"==> {layout_group_name}: Starting converging")
 
@@ -1396,7 +1416,7 @@ class MosrangeSelector(Selector):
         self.logger.info(f"<== {layout_group_name}: Finished converging")
         self.logger.info("=====================================================")
         end_layout_name = f"layout{self.last_layout_num}"
-        self.log(f"{layout_group_name},{end_layout_name}")
+        self.log(layout_group_name, end_layout_name)
         
         # update required coverage in case we failed to converge in the first group
         if first_group and not self.is_result_within_target_range(layout_result):
@@ -1412,9 +1432,10 @@ class MosrangeSelector(Selector):
                 self.logger.info(f">>> Updating required coverage of {self.metric_name}: <<<")
                 self.logger.info(f"\t>>> from: [{Utils.format_large_number(prev_val)} , {prev_coverage}%] <<<")
                 self.logger.info(f"\t>>> to  : [{Utils.format_large_number(self.metric_val)} , {self.metric_coverage}%] <<<")
-                
+        elif not self.is_result_within_target_range(layout_result):
+            layout, layout_result = self.find_closest_layout_to_required_coverage()
         closest_layout_name = layout_result['layout']
-        self.log(f"{layout_group_name}_converged,{closest_layout_name}")
+        self.log(f"{layout_group_name}_converged", closest_layout_name)
 
         self.logger.info("=====================================================")
         self.logger.info(f"Running {layout_group_name} with zero pages")
@@ -1423,15 +1444,15 @@ class MosrangeSelector(Selector):
         layout_zeroes = list(set(layout) | set(tail_pages))
         converged_layout_with_zeroes_r = self.run_next_layout(layout_zeroes)
         layout_name = converged_layout_with_zeroes_r['layout']
-        self.log(f"{layout_group_name}_with_zeroes,{layout_name}")
+        self.log(f"{layout_group_name}_with_zeroes", layout_name)
 
-        self.log(f"{layout_group_name}_start_shake_runtime,layout{self.last_layout_num+1}")
+        self.log(f"{layout_group_name}_start_shake_runtime" ,f"layout{self.last_layout_num+1}")
         self.logger.info("=====================================================")
         self.logger.info(f"==> {layout_group_name}: Start shaking runtime")
         self.shake_runtime(layout, shake_budget)
         self.logger.info(f"<== {layout_group_name}: Finished shaking runtime")
         self.logger.info("=====================================================")
-        self.log(f"{layout_group_name}_end_shake_runtime,layout{self.last_layout_num}")
+        self.log(f"{layout_group_name}_end_shake_runtime", f"layout{self.last_layout_num}")
 
         return layout_result, converged_layout_with_zeroes_r
 

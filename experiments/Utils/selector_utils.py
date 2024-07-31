@@ -37,6 +37,7 @@ class Selector:
         self.last_layout_num = 0
         self.num_generated_layouts = 0
         self.layouts = []
+        self.phase_layout_names = []
         self.layout_names = []
         self.budget = None
         self.logger = logging.getLogger(__name__)
@@ -432,6 +433,7 @@ class Selector:
             self.layouts.append(mem_layout)
             self.layout_names.append(layout_name)
             self.log_layout_result(prev_res, True)
+            self.phase_layout_names.append(layout_name)
             return prev_res
         elif not found and prev_res is not None:
             found_content, content_prev_res = self.find_layout_results(mem_layout)
@@ -440,6 +442,7 @@ class Selector:
                 self.last_layout_num -= 1
                 # assert False
                 self.logger.warning(f'--- {layout_name} already exists but under different name [{content_prev_res["layout"]}]. ---')
+                self.phase_layout_names.append(content_prev_res["layout"])
                 return content_prev_res
 
             self.logger.warning(f'--- {layout_name} already exists but its content is changed. ---')
@@ -451,9 +454,11 @@ class Selector:
                 self.layouts.append(prev_mem_layout)
                 self.layout_names.append(layout_name)
                 self.log_layout_result(prev_res, True)
+                self.phase_layout_names.append(layout_name)
                 return prev_res
 
         self.num_generated_layouts += 1
+        self.phase_layout_names.append(layout_name)
         self.write_layout(layout_name, mem_layout)
         out_dir = f'{self.exp_root_dir}/{layout_name}'
         run_cmd = f'{self.run_experiment_cmd} {layout_name}'
@@ -524,3 +529,6 @@ class Selector:
     
     def get_remaining_budget(self):
         return self.budget - self.num_generated_layouts
+
+    def reset_phase_layout_names(self):
+        self.phase_layout_names = []
