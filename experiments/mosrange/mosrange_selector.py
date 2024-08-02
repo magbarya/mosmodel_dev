@@ -452,11 +452,11 @@ class MosrangeSelector(Selector):
 
         res_layouts = []
         if beta_pebs >= left_pebs_coverage:
-            new_layout, new_pebs = self.find_layout(self, beta_df, left_pebs_coverage, epsilon=0.2, hot_to_cold=True)
+            new_layout, new_pebs = self.find_layout(beta_df, left_pebs_coverage, epsilon=0.2, hot_to_cold=True)
             if new_layout is None:
                 alpha_df = self.pebs_df.query(f'PAGE_NUMBER in {alpha_layout}')
                 pebs_df = pd.concat([beta_df, alpha_df], ignore_index=True)
-                new_layout, new_pebs = self.find_layout(self, pebs_df, left_pebs_coverage, epsilon=1, hot_to_cold=None)
+                new_layout, new_pebs = self.find_layout(pebs_df, left_pebs_coverage, epsilon=1, hot_to_cold=None)
         else:
             new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=False)
             if new_layout is None:
@@ -466,7 +466,7 @@ class MosrangeSelector(Selector):
                 if new_layout is None:
                     self.logger.warning(f"get_complement_surrounding_layouts: using tail pages to select layout based on beta pages")
                     new_layout, new_pebs = self.add_pages_to_base_layout(beta_layout, alpha_layout, None, left_pebs_coverage, tail=True)
-        
+
         assert new_layout is not None
         res_layouts.append(new_layout)
 
@@ -1022,7 +1022,7 @@ class MosrangeSelector(Selector):
         while True:
             if self.consumed_budget():
                 return None, None
-            
+
             layout, pebs = self.add_pages_to_base_layout(base_layout, add_working_set, None, expected_pebs)
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - add_pages_virtually_to_find_desired_layout --> None")
@@ -1061,7 +1061,7 @@ class MosrangeSelector(Selector):
         while True:
             if self.consumed_budget():
                 return None, None
-            
+
             layout, pebs = self.add_pages_to_base_layout(base_layout, add_working_set, remove_working_set, expected_pebs)
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - add_pages_to_find_desired_layout() --> None")
@@ -1124,7 +1124,7 @@ class MosrangeSelector(Selector):
         while True:
             if self.consumed_budget():
                 return None, None
-            
+
             layout, pebs = self.remove_pages(base_layout, remove_working_set, expected_pebs)
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - remove_pages_to_find_desired_layout() --> None")
@@ -1158,7 +1158,7 @@ class MosrangeSelector(Selector):
 
     def find_desired_layout(self, initial_layouts, max_iterations=10):
         self.logger.debug(f"entry - find_desired_layout()")
-        
+
         tested_layouts = []
 
         left, right = self.find_surrounding_initial_layouts(initial_layouts)
@@ -1190,7 +1190,7 @@ class MosrangeSelector(Selector):
         layout_result = None
         while not self.is_result_within_target_range(layout_result):
             alpha, beta, gamma, delta, U = self.get_working_sets(next_layout, base_layout)
-            
+
             layout, layout_result = self.add_pages_to_find_desired_layout(next_layout_r, base_layout_r, beta, None)
             if layout_result is None:
                 layout, layout_result = self.add_pages_to_find_desired_layout(next_layout_r, base_layout_r, beta, alpha)
@@ -1203,7 +1203,7 @@ class MosrangeSelector(Selector):
 
             if layout_result is not None:
                 tested_layouts.append(layout_result)
-                
+
             if self.consumed_budget():
                 self.disable_budget()
                 # find closest layout to desired coverage
@@ -1345,7 +1345,7 @@ class MosrangeSelector(Selector):
         # Check if the file exists
         if not os.path.exists(file_path):
             return
-    
+
         # Append a date-time suffix to the filename for the backup
         date_suffix = datetime.now().strftime("%Y%m%d_%H%M%S")
         backup_file = f"{file_path}_{date_suffix}"
@@ -1356,27 +1356,27 @@ class MosrangeSelector(Selector):
         # Truncate the original file
         with open(file_path, 'w') as file:
             pass  # Opening in 'w' mode truncates the file
-    
+
     def log(self, key, val, truncate=False):
         if truncate:
-            self.backup_and_truncate_log(self.log_file_path)        
-        
+            self.backup_and_truncate_log(self.log_file_path)
+
         msg = f"{key},{val}"
         with open(self.log_file_path, 'a') as f:
             f.write(msg)
-            f.write('\n')        
-    
+            f.write('\n')
+
     def log_layouts(self, key, truncate=False):
         log_file_path = self.current_directory / "layouts_log.csv"
         if truncate:
             self.backup_and_truncate_log(log_file_path)
-        
+
         # starting new group
         if truncate or 'group_details' in key:
             self.init_group_layouts = []
         curr_phase_group_layouts = list(set(self.phase_layout_names) - set(self.init_group_layouts))
         self.init_group_layouts += curr_phase_group_layouts
-        
+
         val = str(curr_phase_group_layouts)
         msg = f"{key},{val}"
         with open(log_file_path, 'a') as f:
@@ -1385,11 +1385,11 @@ class MosrangeSelector(Selector):
 
     layout_group = 0
     def run_with_custom_init_layouts(
-        self, 
-        initial_layouts, 
-        shake_budget=5, 
-        group_details="N/A", 
-        first_group=False, 
+        self,
+        initial_layouts,
+        shake_budget=5,
+        group_details="N/A",
+        first_group=False,
         skip_first_group_convergence=False
         ):
         layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
@@ -1417,7 +1417,7 @@ class MosrangeSelector(Selector):
         self.logger.info("=====================================================")
         end_layout_name = f"layout{self.last_layout_num}"
         self.log(layout_group_name, end_layout_name)
-        
+
         # update required coverage in case we failed to converge in the first group
         if first_group and not self.is_result_within_target_range(layout_result):
             layout, layout_result = self.find_closest_layout_to_required_coverage()
