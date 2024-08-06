@@ -1055,7 +1055,7 @@ class MosrangeSelector(Selector):
 
         num_layouts_before = self.last_layout_num
 
-        assert self.realMetricCoverage(next_layout_r) > self.metric_coverage > self.realMetricCoverage(base_layout_r)
+        assert self.realMetricCoverage(next_layout_r) >= self.metric_coverage >= self.realMetricCoverage(base_layout_r)
         base_layout = base_layout_r['hugepages']
         expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
         prev_real = None
@@ -1234,6 +1234,8 @@ class MosrangeSelector(Selector):
                         break
                 if found:
                     break
+            # if not found:
+            #     break
 
         self.logger.debug(f"exit - find_desired_layout --> layout: #{len(layout)} pages")
         return layout, layout_result
