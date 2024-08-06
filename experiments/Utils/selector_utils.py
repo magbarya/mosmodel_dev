@@ -27,7 +27,7 @@ class Selector:
         self.exp_root_dir = exp_root_dir
         self.num_layouts = num_layouts
         self.num_repeats = num_repeats
-        self.collectResults = CollectResults(exp_root_dir, results_dir, num_repeats)
+        self.collectResults = CollectResults(exp_root_dir, results_dir, num_repeats, outlier_method='iqr')
         self.run_experiment_cmd = run_experiment_cmd
         self.metric_name = metric_name
         self.rebuild_pebs = rebuild_pebs
