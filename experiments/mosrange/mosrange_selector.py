@@ -1157,7 +1157,7 @@ class MosrangeSelector(Selector):
                 base_layout_r = layout_result
             expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
 
-    def find_desired_layout(self, initial_layouts, max_iterations=10):
+    def find_desired_layout(self, initial_layouts, max_iterations=20):
         self.logger.debug(f"entry - find_desired_layout()")
 
         tested_layouts = []
@@ -1369,6 +1369,30 @@ class MosrangeSelector(Selector):
             f.write(msg)
             f.write('\n')
 
+    def write_init_group_results(self, group_name, group_details, phase):
+        results_df = self.collect_results(False)
+        results_df = results_df.query(f'layout in {self.phase_layout_names}')
+        results_df['group_details'] = group_details
+        results_df['phase'] = phase
+
+        init_group_results_file = self.current_directory / f'{group_name}_results.csv'
+        if init_group_results_file.exists:
+            group_df = pd.read_csv(init_group_results_file)
+            group_df = pd.concat([group_df, results_df], ignore_index=True)
+        else:
+            group_df = results_df
+        group_df.to_csv(init_group_results_file, index=False)
+
+        all_init_results_file = self.current_directory / 'all_init_groups_results.csv'
+        if all_init_results_file.exists:
+            all_groups_df = pd.read_csv(all_init_results_file)
+            all_groups_df = pd.concat([all_groups_df, results_df], ignore_index=True)
+        else:
+            all_groups_df = results_df
+        all_groups_df.to_csv(all_init_results_file, index=False)
+
+        self.reset_phase_layout_names()
+
     def log_layouts(self, key, truncate=False):
         log_file_path = self.current_directory / "layouts_log.csv"
         if truncate:
@@ -1393,7 +1417,8 @@ class MosrangeSelector(Selector):
         shake_budget=5,
         group_details="N/A",
         first_group=False,
-        skip_first_group_convergence=False
+        skip_first_group_convergence=False,
+        enforce_convergence=True
         ):
         layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
         MosrangeSelector.layout_group += 1
@@ -1422,7 +1447,7 @@ class MosrangeSelector(Selector):
         self.log(layout_group_name, end_layout_name)
 
         # update required coverage in case we failed to converge in the first group
-        if first_group and not self.is_result_within_target_range(layout_result):
+        if first_group and not enforce_convergence:
             layout, layout_result = self.find_closest_layout_to_required_coverage()
             if not self.is_result_within_target_range(layout_result):
                 # update metric_coverage to the one got by the executed layout to save convergence time
@@ -1435,10 +1460,15 @@ class MosrangeSelector(Selector):
                 self.logger.info(f">>> Updating required coverage of {self.metric_name}: <<<")
                 self.logger.info(f"\t>>> from: [{Utils.format_large_number(prev_val)} , {prev_coverage}%] <<<")
                 self.logger.info(f"\t>>> to  : [{Utils.format_large_number(self.metric_val)} , {self.metric_coverage}%] <<<")
-        elif not self.is_result_within_target_range(layout_result):
+        elif enforce_convergence:
             layout, layout_result = self.find_closest_layout_to_required_coverage()
+            assert self.is_result_within_target_range(layout_result)
         closest_layout_name = layout_result['layout']
         self.log(f"{layout_group_name}_converged", closest_layout_name)
+
+        self.write_init_group_results(layout_group_name, group_details, f'converging_to_{round(self.metric_coverage, 1)}_{self.metric_name}')
+        self.phase_layout_names = [closest_layout_name]
+        self.write_init_group_results(layout_group_name, group_details, 'converged_layout')
 
         self.logger.info("=====================================================")
         self.logger.info(f"Running {layout_group_name} with zero pages")
@@ -1449,6 +1479,8 @@ class MosrangeSelector(Selector):
         layout_name = converged_layout_with_zeroes_r['layout']
         self.log(f"{layout_group_name}_with_zeroes", layout_name)
 
+        self.write_init_group_results(layout_group_name, group_details, 'converged_layout_with_all_zero_pages')
+
         self.log(f"{layout_group_name}_start_shake_runtime" ,f"layout{self.last_layout_num+1}")
         self.logger.info("=====================================================")
         self.logger.info(f"==> {layout_group_name}: Start shaking runtime")
@@ -1456,6 +1488,8 @@ class MosrangeSelector(Selector):
         self.logger.info(f"<== {layout_group_name}: Finished shaking runtime")
         self.logger.info("=====================================================")
         self.log(f"{layout_group_name}_end_shake_runtime", f"layout{self.last_layout_num}")
+
+        self.write_init_group_results(layout_group_name, group_details, 'shaking_runtime')
 
         return layout_result, converged_layout_with_zeroes_r
 
