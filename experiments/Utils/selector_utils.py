@@ -27,7 +27,7 @@ class Selector:
         self.exp_root_dir = exp_root_dir
         self.num_layouts = num_layouts
         self.num_repeats = num_repeats
-        self.collectResults = CollectResults(exp_root_dir, results_dir, num_repeats, outlier_method='iqr')
+        self.collectResults = CollectResults(exp_root_dir, results_dir, num_repeats, outlier_method='std')
         self.run_experiment_cmd = run_experiment_cmd
         self.metric_name = metric_name
         self.rebuild_pebs = rebuild_pebs
@@ -510,23 +510,23 @@ class Selector:
             r = self.run_next_layout(l)
             results_df = pd.concat([results_df, r], ignore_index=True)
         return results_df
-    
+
     def reset_budget(self, new_budget):
         self.num_generated_layouts = 0
         self.budget = new_budget
-    
+
     def disable_budget(self):
         self.budget = None
-        
+
     def has_budget(self):
         if self.budget is None:
             return True
         remaining_budget = self.get_remaining_budget()
         return remaining_budget > 0
-    
+
     def consumed_budget(self):
         return not self.has_budget()
-    
+
     def get_remaining_budget(self):
         return self.budget - self.num_generated_layouts
 

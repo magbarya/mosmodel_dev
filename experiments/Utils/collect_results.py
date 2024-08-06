@@ -37,10 +37,10 @@ class OutlierDetector:
         return outliers
 
     def _detect_outliers_iqr(self, df):
-        Q1 = df.quantile(0.25)
-        Q3 = df.quantile(0.75)
+        Q1 = df.groupby(df.index).quantile(0.25)
+        Q3 = df.groupby(df.index).quantile(0.75)
         IQR = Q3 - Q1
-        outliers = ((df < (Q1 - self.factor * IQR)) | (df > (Q3 + self.factor * IQR))).any(axis=1)
+        outliers = ((df.groupby(df.index).median() < (Q1 - factor * IQR)) | (df.groupby(df.index).median() > (Q3 + factor * IQR))).any(axis=1)
         return outliers
 
     def _detect_outliers_isolation_forest(self, df):
@@ -70,12 +70,12 @@ class CollectResults:
         self.num_repeats = num_repeats
         self.outlier_detector = OutlierDetector(method=outlier_method)
         logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
-    
+
     class Experiment:
         def __init__(self, layout, experiments_root):
             self._layout = layout
             self._experiments_root = experiments_root
-            
+
         @staticmethod
         def __readSingleFile(file_name, metrics_column=0, stats_column=1):
             try:
@@ -132,7 +132,7 @@ class CollectResults:
             if f.is_dir() and f.name.startswith('layout') and not f.name == 'layouts' and 'outlier' not in f.name:
                 layout_list.append(f.name)
         return layout_list
-        
+
     def __collectRawResults(self):
         layout_list = CollectResults.__getLayouts(self.experiments_root)
         if not layout_list:
@@ -155,7 +155,7 @@ class CollectResults:
 
         df = pd.concat(dataframe_list)
         return df
-    
+
     def __handleOutliers(self, df, remove_outliers, skip_outliers):
         found = False
         # Detect outliers
@@ -179,18 +179,18 @@ class CollectResults:
             elif not skip_outliers:
                 raise ValueError('CollectResults: Cells marked with True are the outliers.')
         return found
-            
+
     def collectResults(self, write_results=True, remove_outliers=True, skip_outliers=False):
         logging.debug(f'collecting results to the directory: {self.output_dir}')
         df = self.__collectRawResults()
         if df is None or df.empty:
             logging.debug('there is no results to collect, skipping...')
             return None, False
-        
+
         mean_df = df.groupby(df.index).mean()
         median_df = df.groupby(df.index).median()
         std_df = df.groupby(df.index).std()
-        
+
         found_outliers = self.__handleOutliers(df, remove_outliers, skip_outliers)
 
         if write_results:
@@ -199,8 +199,8 @@ class CollectResults:
             CollectResults.__writeDataframeToCsv(median_df, self.output_dir + 'median.csv')
             CollectResults.__writeDataframeToCsv(df, self.output_dir + 'all_repeats.csv')
             CollectResults.__writeDataframeToCsv(std_df, self.output_dir + 'std.csv')
-        
+
         logging.info(f'** results of {len(median_df)} layouts were collected and written **')
-        
+
         res_df = Utils.load_dataframe(median_df.reset_index())
         return res_df, found_outliers
