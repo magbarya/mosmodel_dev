@@ -264,6 +264,9 @@ class Selector:
             self.logger.error(f'Please try to rerun PEBS with higher frequency!')
             self.logger.error(f'Please make sure that PEBS is highly accurate and have no Errata in your CPU generation.')
             self.logger.error(f'You can try run PEBS on a newer CPU generation and use it for this CPU generation (as both have similar TLB structure)')
+            self.logger.error(f'All 4KB layout results: {self.all_4kb_r}')
+            self.logger.error(f'All 2MB layout results: {self.all_2mb_r}')
+            self.logger.error(f'All PEBS layout results: {self.all_pebs_r}')
             assert False
 
         # add missing pages to pebs
