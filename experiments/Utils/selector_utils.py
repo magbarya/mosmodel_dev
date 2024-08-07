@@ -257,6 +257,15 @@ class Selector:
         # either metric_val or metric_coverage will be provided
         self.metric_range_delta = self.metric_max_val - self.metric_min_val
 
+        all_pebs_real_misses_coverage = self.realMetricCoverage(self.all_pebs_r, 'stlb_misses')
+        all_pebs_real_runtime_coverage = self.realMetricCoverage(self.all_pebs_r, 'cpu_cycles')
+        if all_pebs_real_misses_coverage < 80 or all_pebs_real_runtime_coverage < 80:
+            self.logger.error(f'PEBS could not sample all pages with major L2 TLB misses!')
+            self.logger.error(f'Please try to rerun PEBS with higher frequency!')
+            self.logger.error(f'Please make sure that PEBS is highly accurate and have no Errata in your CPU generation.')
+            self.logger.error(f'You can try run PEBS on a newer CPU generation and use it for this CPU generation (as both have similar TLB structure)')
+            assert False
+
         # add missing pages to pebs
         if self.rebuild_pebs:
             # backup pebs_df before updating it
