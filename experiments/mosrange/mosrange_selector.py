@@ -1370,7 +1370,7 @@ class MosrangeSelector(Selector):
             f.write('\n')
 
     def write_init_group_results(self, group_name, group_details, phase):
-        results_df = self.collect_results(False)
+        results_df, _ = self.collect_results(False)
         results_df = results_df.query(f'layout in {self.phase_layout_names}')
         results_df['group_details'] = group_details
         results_df['phase'] = phase
