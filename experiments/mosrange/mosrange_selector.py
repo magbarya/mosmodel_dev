@@ -1375,7 +1375,7 @@ class MosrangeSelector(Selector):
         results_df['phase'] = phase
 
         init_group_results_file = self.current_directory / f'{group_name}_results.csv'
-        if init_group_results_file.exists:
+        if init_group_results_file.exists():
             group_df = pd.read_csv(init_group_results_file)
             group_df = pd.concat([group_df, results_df], ignore_index=True)
         else:
@@ -1383,7 +1383,7 @@ class MosrangeSelector(Selector):
         group_df.to_csv(init_group_results_file, index=False)
 
         all_init_results_file = self.current_directory / 'all_init_groups_results.csv'
-        if all_init_results_file.exists:
+        if all_init_results_file.exists():
             all_groups_df = pd.read_csv(all_init_results_file)
             all_groups_df = pd.concat([all_groups_df, results_df], ignore_index=True)
         else:
