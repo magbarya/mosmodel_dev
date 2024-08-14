@@ -170,7 +170,7 @@ class CollectResults:
             logging.warning(outliers)
             if remove_outliers:
                 now = str(datetime.datetime.now())[:19].replace(" ", "_").replace(":", "-")
-                for layout in df[outliers].index:
+                for layout in df[outliers].index.drop_duplicates():
                     l_old_path = f"{self.experiments_root}/{layout}"
                     l_new_path = f"{l_old_path}.outlier.{now}"
                     print(f'remove outlier: {l_old_path} --> {l_new_path}')
