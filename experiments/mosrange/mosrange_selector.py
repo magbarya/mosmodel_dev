@@ -1438,10 +1438,20 @@ class MosrangeSelector(Selector):
             layout = self.select_layout_from_endpoints(left, right)
             layout_result = self.run_next_layout(layout)
         else:
+            max_converge_budget = 60
             converge_budget = 20
             if first_group:
                 converge_budget = 30
-            layout, layout_result = self.find_desired_layout(initial_layouts, max_iterations=converge_budget)
+            while True:
+                layout, layout_result = self.find_desired_layout(initial_layouts, max_iterations=converge_budget)
+                if self.is_result_within_target_range(layout_result):
+                    break
+                converge_budget += 10
+                if converge_budget > max_converge_budget:
+                    self.logger.warning(f"consumed all given budget ({max_converge_budget} in total) but still could not converge!")
+                    break
+                self.logger.warning(f"could not converge yet, increasing the budget by 10 (to: {converge_budget})")
+
 
         self.logger.info(f"<== {layout_group_name}: Finished converging")
         self.logger.info("=====================================================")
