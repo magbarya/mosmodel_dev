@@ -12,7 +12,8 @@ SUBMODULES := \
 	bayesian_optimization \
 	mosrange \
 	mosmodel \
-	all_data
+	all_data \
+	manual_layouts
 
 SUBMODULES := $(addprefix $(MODULE_NAME)/,$(SUBMODULES))
 
