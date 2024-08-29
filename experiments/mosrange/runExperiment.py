@@ -37,18 +37,15 @@ if __name__ == "__main__":
     if args.metric_value is not None and args.metric_coverage is not None:
         raise ValueError('Should provide either metric_value or metric_coverage arguments: Both were provided!')
 
-
     logging_level = logging.INFO
     if args.verbose:
         logging_level = logging.DEBUG
     logging.basicConfig(level=logging_level, format='[%(name)s:%(levelname)s] %(message)s')
 
     exp = MosrangeSelector(args.memory_footprint,
-    exp = MosrangeSelector(args.memory_footprint,
                              args.pebs_mem_bins,
                              args.exp_root_dir,
                              args.results_dir,
-                             args.run_experiment_cmd,
                              args.run_experiment_cmd,
                              args.num_layouts,
                              args.num_repeats,

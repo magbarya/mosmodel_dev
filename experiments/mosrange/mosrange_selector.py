@@ -40,7 +40,6 @@ class MosrangeSelector(Selector):
         self.metric_coverage = metric_coverage
         self.range_epsilon = range_epsilon
         self.absolute_range_epsilon = absolute_range_epsilon
-        self.debug = debug
         self.search_pebs_threshold = 0.5
         self.last_lo_layout = None
         self.last_hi_layout = None
