@@ -22,7 +22,7 @@ def parseArguments():
     parser.add_argument('-x', '--run_experiment_cmd', required=True)
     parser.add_argument('-n', '--num_layouts', required=True, type=int)
     parser.add_argument('-r', '--num_repeats', required=True, type=int)
-    parser.add_argument('-m', '--metric', choices=['stlb_misses', 'stlb_hits', 'walk_cycles'], default='stlb_misses')
+    parser.add_argument('-m', '--metric', choices=['stlb_misses', 'stlb_hits', 'walk_cycles', 'walk_active', 'walk_pending'], default='stlb_misses')
     parser.add_argument('-v', '--metric_value', type=float, default=None)
     parser.add_argument('-c', '--metric_coverage', type=int, default=None)
     parser.add_argument('-d', '--debug', action='store_true')

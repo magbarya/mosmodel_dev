@@ -1,3 +1,3 @@
 [submodule "mosalloc"]
 	path = mosalloc
-	url = git@github.com:technion-csl/mosalloc.git
+	url = git@github.com:magbarya/mosalloc_dev.git

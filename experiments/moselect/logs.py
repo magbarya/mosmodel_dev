@@ -121,14 +121,14 @@ class SubgroupsLog(Log, metaclass=Singleton):
 
     def addRecord(self,
                   layout, pebs_coverage, writeLog=False):
-        self.df = self.df.append({
+        new_row = pd.Series({
             'layout': layout,
             'total_budget': -1,
             'remaining_budget': -1,
             'pebs_coverage': pebs_coverage,
             'real_coverage': -1,
-            'walk_cycles': -1
-            }, ignore_index=True)
+            'walk_cycles': -1 })
+        self.df = pd.concat([self.df, new_row.to_frame().T], ignore_index=True)
         if writeLog:
             self.writeLog()
 
@@ -259,7 +259,7 @@ class StateLog(Log):
             base_pages = self.getLayoutPages(scan_base)
         added_pages = list(set(pages) - set(base_pages))
         added_pages.sort()
-        self.df = self.df.append({
+        new_row = pd.Series({
             'layout': layout,
             'scan_direction': scan_direction,
             'scan_order': scan_order,
@@ -271,16 +271,18 @@ class StateLog(Log):
             'increment_real_coverage': self.getRealCoverage(increment_base),
             'real_coverage': -1,
             'walk_cycles': -1
-            }, ignore_index=True)
+            })
+        self.df = pd.concat([self.df, new_row.to_frame().T], ignore_index=True)
         if writeLog:
             self.writeLog()
         if layout not in self.pages_df['layout']:
-            self.pages_df = self.pages_df.append({
+            new_row = pd.Series({
                 'layout': layout,
                 'base_layout': scan_base,
                 'added_pages': added_pages,
                 'pages': pages
-                }, ignore_index=True)
+                })
+            self.pages_df = pd.concat([self.pages_df, new_row.to_frame().T], ignore_index=True)
             if not self.dry_run:
                 self.pages_df.to_csv(self.pages_log_name, index=False)
 

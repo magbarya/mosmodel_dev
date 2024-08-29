@@ -10,7 +10,8 @@ SUBMODULES := \
 	mosrange \
 	growing_window_2m \
 	random_window_2m \
-	sliding_window
+	sliding_window \
+	manual_layouts
 
 EXPERIMENTS_MODULE_NAME := $(MODULE_NAME)
 EXPERIMENTS_SUBMODULES := $(addprefix $(EXPERIMENTS_MODULE_NAME)/,$(SUBMODULES))
