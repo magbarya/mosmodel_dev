@@ -27,11 +27,14 @@ export MOSALLOC_TOOL := $(ROOT_DIR)/mosalloc/src/libmosalloc.so
 
 COLLECT_RESULTS := $(SCRIPTS_ROOT_DIR)/collectResults.py
 CHECK_PARANOID := $(SCRIPTS_ROOT_DIR)/checkParanoid.sh
+CSET_SHIELD_CPUS_SCRIPT := $(SCRIPTS_ROOT_DIR)/cset_shield_node_cpus.sh
+SET_CPU_MAX_PERF := $(SCRIPTS_ROOT_DIR)/set_cpu_max_perf.sh
 SET_THP := $(SCRIPTS_ROOT_DIR)/setTransparentHugePages.sh
 SET_CPU_MEMORY_AFFINITY := $(SCRIPTS_ROOT_DIR)/setCpuMemoryAffinity.sh
 MEASURE_GENERAL_METRICS := $(SCRIPTS_ROOT_DIR)/measureGeneralMetrics.sh
 RUN_BENCHMARK := $(SCRIPTS_ROOT_DIR)/runBenchmark.py
 RUN_BENCHMARK_WITH_SLURM := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithSlurm.py
+RUN_BENCHMARK_WITH_CSET_SHIELD := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithCsetShield.py
 COLLECT_MEMORY_FOOTPRINT := $(SCRIPTS_ROOT_DIR)/collectMemoryFootprint.py
 
 ###### global constants
@@ -47,13 +50,11 @@ export OMP_NUM_THREADS := $(NUMBER_OF_CORES_PER_SOCKET)
 export OMP_THREAD_LIMIT := $(OMP_NUM_THREADS) 
 export EXPERIMENTS_ROOT_DIR := $(ROOT_DIR)/$(MODULE_NAME)
 
-define configuration_array
-$(addprefix configuration,$(shell seq 1 $1))
-endef
+CSET_SHIELD_CPUS := $(CSET_SHIELD_CPUS_SCRIPT) $(BOUND_MEMORY_NODE)
 
 #### recipes and rules for prerequisites
 
-.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool
+.PHONY: experiments-prerequisites perf numactl cpuset mosalloc test-run-mosalloc-tool
 
 mosalloc: $(MOSALLOC_TOOL)
 $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
@@ -69,7 +70,7 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl mosalloc
+experiments-prerequisites: perf numactl cpuset mosalloc
 
 PERF_PACKAGES := linux-tools
 KERNEL_VERSION := $(shell uname -r)
@@ -81,6 +82,11 @@ perf:
 
 numactl:
 	$(APT_INSTALL) $@
+
+cpuset:
+	$(APT_INSTALL) $@
+	$(CSET_SHIELD_CPUS)
+	$(SET_CPU_MAX_PERF)
 
 TEST_RUN_MOSALLOC_TOOL := $(SCRIPTS_ROOT_DIR)/testRunMosallocTool.sh
 test-run-mosalloc-tool: $(RUN_MOSALLOC_TOOL) $(MOSALLOC_TOOL)
@@ -113,7 +119,7 @@ $(CUSTOM_RUN_EXPERIMENT_SCRIPT): $(CUSTOM_RUN_EXPERIMENT_TEMPLATE)
 	sed -i "s,__EXPERIMENT_NAME__,$(EXPERIMENT_NAME),g" $@
 	sed -i "s,__NUM_OF_REPEATS__,$(NUM_OF_REPEATS),g" $@
 	sed -i "s,__NUM_OF_THREADS__,$(NUMBER_OF_THREADS),g" $@
-	sed -i "s,__RUN_BENCHMARK_SCRIPT__,$(RUN_BENCHMARK_WITH_SLURM),g" $@
+	sed -i "s,__RUN_BENCHMARK_SCRIPT__,$(RUN_BENCHMARK_WITH_CSET_SHIELD),g" $@
 	sed -i "s,__MEASURE_GENERAL_METRICS_SCRIPT__,$(MEASURE_GENERAL_METRICS),g" $@
 	sed -i "s,__RUN_MOSALLOC_TOOL__,$(RUN_MOSALLOC_TOOL),g" $@
 	sed -i "s,__MOSALLOC_TOOL__,$(MOSALLOC_TOOL),g" $@

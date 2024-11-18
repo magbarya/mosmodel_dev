@@ -27,8 +27,23 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 		$$(BENCHMARK_PATH) $$*
 endef
 
-ifndef SLURM
+define CSET_SHIELD_EXPS_template =
+$(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
+	echo ========== [INFO] start producing: $$@ ==========
+	$$(RUN_BENCHMARK_WITH_CSET_SHIELD) \
+		--num_threads=$$(NUMBER_OF_THREADS) \
+		--num_repeats=$$(NUM_OF_REPEATS) \
+		--submit_command "$$(MEASURE_GENERAL_METRICS)  \
+			$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC)" \
+			-- $$(BENCHMARK_PATH) $$*
+endef
+
+ifdef SERIAL_RUN
 $(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call MEASUREMENTS_template,$(layout),$(repeat)))))
 else
-$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call SLURM_EXPS_template,$(layout),$(repeat)))))
+	ifdef SLURM
+	$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call SLURM_EXPS_template,$(layout),$(repeat)))))
+	else
+	$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call CSET_SHIELD_EXPS_template,$(layout),$(repeat)))))
+	endif
 endif
