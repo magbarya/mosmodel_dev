@@ -12,6 +12,15 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/perf.out: $(EXPERIMENT_DIR)/layouts/$(1)
 		$$(BENCHMARK_PATH) $$*
 endef
 
+define VANILLA_template =
+$(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
+	echo ========== [INFO] start producing: $$@ ==========
+	$$(RUN_BENCHMARK_WITH_CSET_SHIELD) \
+		--num_threads=$$(NUMBER_OF_THREADS) \
+		--num_repeats=$$(NUM_OF_REPEATS) \
+		--submit_command $$(MEASURE_GENERAL_METRICS) -- $$(BENCHMARK_PATH) $$*
+endef
+
 define SLURM_EXPS_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] allocate/reserve hugepages ==========
@@ -38,12 +47,16 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 			-- $$(BENCHMARK_PATH) $$*
 endef
 
-ifdef SERIAL_RUN
-$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call MEASUREMENTS_template,$(layout),$(repeat)))))
+ifdef VANILLA_RUN
+$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call VANILLA_template,$(layout),$(repeat)))))
 else
-	ifdef SLURM
-	$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call SLURM_EXPS_template,$(layout),$(repeat)))))
+	ifdef SERIAL_RUN
+	$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call MEASUREMENTS_template,$(layout),$(repeat)))))
 	else
-	$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call CSET_SHIELD_EXPS_template,$(layout),$(repeat)))))
+		ifdef SLURM
+		$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call SLURM_EXPS_template,$(layout),$(repeat)))))
+		else
+		$(foreach layout,$(LAYOUTS),$(foreach repeat,$(REPEATS),$(eval $(call CSET_SHIELD_EXPS_template,$(layout),$(repeat)))))
+		endif
 	endif
 endif

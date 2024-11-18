@@ -11,7 +11,8 @@ SUBMODULES := \
 	growing_window_2m \
 	random_window_2m \
 	sliding_window \
-	manual_layouts
+	manual_layouts \
+	vanilla
 
 EXPERIMENTS_MODULE_NAME := $(MODULE_NAME)
 EXPERIMENTS_SUBMODULES := $(addprefix $(EXPERIMENTS_MODULE_NAME)/,$(SUBMODULES))

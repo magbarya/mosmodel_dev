@@ -13,7 +13,8 @@ SUBMODULES := \
 	mosrange \
 	mosmodel \
 	all_data \
-	manual_layouts
+	manual_layouts \
+	vanilla
 
 SUBMODULES := $(addprefix $(MODULE_NAME)/,$(SUBMODULES))
 
