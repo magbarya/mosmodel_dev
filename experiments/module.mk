@@ -36,6 +36,7 @@ MEASURE_GENERAL_METRICS := $(SCRIPTS_ROOT_DIR)/measureGeneralMetrics.sh
 RUN_BENCHMARK := $(SCRIPTS_ROOT_DIR)/runBenchmark.py
 RUN_BENCHMARK_WITH_SLURM := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithSlurm.py
 RUN_BENCHMARK_WITH_CSET_SHIELD := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithCsetShield.py
+RUN_WITH_CONDA := $(SCRIPTS_ROOT_DIR)/run_with_conda.sh
 COLLECT_MEMORY_FOOTPRINT := $(SCRIPTS_ROOT_DIR)/collectMemoryFootprint.py
 
 ###### global constants

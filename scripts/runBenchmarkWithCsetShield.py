@@ -29,10 +29,10 @@ def getCommandLineArguments():
 from runBenchmark import BenchmarkRun
 if __name__ == "__main__":
     args = getCommandLineArguments()
-    
+
     repeated_runs = [BenchmarkRun(args.benchmark_dir, args.output_dir +'/repeat'+str(i+1) )
             for i in range(args.num_repeats)]
-    
+
     existing_repeat_dirs = 0
     for run in repeated_runs:
         if run.doesOutputDirectoryExist():
@@ -46,7 +46,7 @@ if __name__ == "__main__":
 #     if should_pre_run:
 #         repeated_runs[0].prerun() # pre_run only once for all repeats
 
-    cset_shield_cmd = 'sudo -E cset shield --exec bash -- {args.submit_command}'
+    cset_shield_cmd = f'sudo -E cset shield --exec {args.submit_command}'
     for run in repeated_runs: # run for each repeat
         p = run.run(args.num_threads, cset_shield_cmd)
         p.check_returncode()

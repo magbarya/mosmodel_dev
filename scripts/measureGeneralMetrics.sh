@@ -14,23 +14,22 @@ general_events="ref-cycles,cpu-cycles,instructions,"
 #general_events+=",LLC-loads,LLC-stores,LLC-load-misses,LLC-store-misses"
 
 prefix_perf_command="perf stat --field-separator=, --output=perf.out"
-# extract architecture specific dtlb and energy events from 'ocperf list' output
+# extract architecture specific dtlb events from 'perf list'
 dtlb_events=`perf list | \grep -o "dtlb_.*_misses\.\w*" | sort -u | tr '\n' ','`
 dtlb_events=${dtlb_events%?} # remove the trailing , charachter
 #dtlb_events=dtlb_load_misses.miss_causes_a_walk,dtlb_load_misses.walk_duration,dtlb_store_misses.miss_causes_a_walk,dtlb_store_misses.walk_duration
 
-# We also measure energy if the system allows it.
-energy_events=`perf list | \grep -o "\w*\/energy.*\/" | sort -u | tr '\n' ',i'`
-energy_events=${energy_events%?} # remove the trailing , charachter
-
 perf_command="$prefix_perf_command --event $general_events$dtlb_events -- "
 
-if [[ -z "$energy_events" ]]; then
-    echo "this CPU does not support energy events"
-else
-    echo "this CPU supports energy events"
-    perf_command+="$prefix_perf_command --event $energy_events --cpu=0 -- "
-fi
+# We also measure energy if the system allows it.
+# energy_events=`perf list | \grep -o "\w*\/energy.*\/" | sort -u | tr '\n' ',i'`
+# energy_events=${energy_events%?} # remove the trailing , charachter
+# if [[ -z "$energy_events" ]]; then
+#     echo "this CPU does not support energy events"
+# else
+#     echo "this CPU supports energy events"
+#     perf_command+="$prefix_perf_command --event $energy_events --cpu=0 -- "
+# fi
 
 time_format="seconds-elapsed,%e\nuser-time-seconds,%U\n"
 time_format+="kernel-time-seconds,%S\nmax-resident-memory-kb,%M"
