@@ -4,6 +4,8 @@ MODULE_NAME := experiments/$(MANUAL_LAYOUTS_EXPERIMENT_NAME)
 MANUAL_LAYOUTS_EXPERIMENT := $(MODULE_NAME)
 MANUAL_LAYOUTS_RESULTS := $(subst experiments,results,$(MANUAL_LAYOUTS_EXPERIMENT))
 
+NUM_OF_REPEATS := $(DEFAULT_NUM_OF_REPEATS)
+
 MANUAL_LAYOUTS_DIR := $(MANUAL_LAYOUTS_EXPERIMENT)/layouts
 # Gather all CSV files in the layouts directory and remove the .csv suffix
 MANUAL_LAYOUTS := $(patsubst %.csv, %, $(wildcard $(MANUAL_LAYOUTS_DIR)/*.csv))
