@@ -82,7 +82,7 @@ if not args.skip_outliers:
             now = str(datetime.datetime.now())[:19]
             now = now.replace(" ","_").replace(":","-")
             for layout, outlier in outliers.iterrows():
-                if not outlier['seconds-elapsed'] and not outlier['ref-cycles'] and not outlier['cpu-cycles']:
+                if not outlier['seconds-elapsed'] and not outlier['cpu-cycles']:
                     continue
                 l_old_path = args.experiments_root + '/' + layout
                 l_new_path = l_old_path + '.outlier.' + now
