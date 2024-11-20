@@ -26,7 +26,7 @@ check_variable_is_set "NUM_OF_REPEATS"
 EXP_RESULTS_DIR=$RESULTS_ROOT_DIR/$EXPERIMENT_NAME
 EXP_ROOT_DIR=$EXPERIMENTS_ROOT_DIR/$EXPERIMENT_NAME
 
-COLLECT_RESULTS_COMMAND="$COLLECT_RESULTS_SCRIPT --experiments_root=$EXP_ROOT_DIR --repeats=$NUM_OF_REPEATS --output_dir=$EXP_RESULTS_DIR --skip_outliers"
+COLLECT_RESULTS_COMMAND="$COLLECT_RESULTS_SCRIPT --experiments_root=$EXP_ROOT_DIR --repeats=$NUM_OF_REPEATS --output_dir=$EXP_RESULTS_DIR --remove_outliers"
 
 echo "==========================================="
 echo "Collecting results from $EXP_RESULTS_DIR ..."

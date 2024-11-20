@@ -72,7 +72,7 @@ index_column = mean_df.index
 interesting_metrics = ['seconds-elapsed', 'ref-cycles', 'cpu-cycles']
 interesting_metrics = [metric for metric in interesting_metrics if metric in mean_df.columns]
 variation = std_df[interesting_metrics] / mean_df[interesting_metrics]
-outlier_threshold = 0.05
+outlier_threshold = 0.02
 outliers = variation > outlier_threshold
 if not args.skip_outliers:
     if outliers.any().any():
