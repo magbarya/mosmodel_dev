@@ -53,9 +53,13 @@ if __name__ == "__main__":
 
     cset_shield_cmd = f'sudo -E cset shield --exec {args.submit_command}'
     for run in repeated_runs: # run for each repeat
+        print('================================================')
+        print(f'start producing:\n\t{run._output_dir}')
         p = run.run(args.num_threads, cset_shield_cmd)
         p.check_returncode()
+        print(f'start post-running...')
         run.postrun()
+        print('================================================')
 
     existing_repeat_dirs = 0
     for run in repeated_runs:

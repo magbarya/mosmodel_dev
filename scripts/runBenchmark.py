@@ -33,13 +33,13 @@ signal.signal(signal.SIGTERM, killAllSubprocesses)
 
 class BenchmarkRun:
     def __init__(self, benchmark_dir: str, run_dir: str, output_dir: str):
-        self._benchmark_dir = Path(benchmark_dir)
+        self._benchmark_dir = Path(benchmark_dir).absolute()
         self._assertBenchmarkIsValid()
 
-        self._run_dir = Path(run_dir)
+        self._run_dir = Path(run_dir).absolute()
         self._createNewRunDirectory()
 
-        self._output_dir = Path(output_dir)
+        self._output_dir = Path(output_dir).absolute()
         self._createNewOutputDirectory()
 
         log_file_name = self._output_dir / 'benchmark.log'
@@ -70,7 +70,11 @@ class BenchmarkRun:
             self._output_dir.mkdir(parents=True, exist_ok=True)
 
     def doesOutputDirectoryExist(self):
-        return self._output_dir.exists()
+        # True if it exists, it's a dir, and it contains any items
+        perf_out_exists = False
+        if self._output_dir.exists() and self._output_dir.is_dir():
+            perf_out_exists = any(f.name == 'perf.out' and f.is_file() for f in self._output_dir.iterdir())
+        return perf_out_exists
 
     def doesRunDirectoryExist(self):
         return self._run_dir.exists()
