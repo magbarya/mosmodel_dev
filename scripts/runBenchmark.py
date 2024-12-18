@@ -13,6 +13,8 @@ import os.path
 import sys
 import glob
 
+from pathlib import Path
+
 # try to kill all subprocesses if this script is killed by a signal from the user
 def killAllSubprocesses(signum, frame):
     current_process = psutil.Process()
@@ -30,20 +32,17 @@ signal.signal(signal.SIGTERM, killAllSubprocesses)
 
 
 class BenchmarkRun:
-    def __init__(self, benchmark_dir: str, output_dir: str):
-        self._benchmark_dir = benchmark_dir
+    def __init__(self, benchmark_dir: str, run_dir: str, output_dir: str):
+        self._benchmark_dir = Path(benchmark_dir)
         self._assertBenchmarkIsValid()
 
-        self._output_dir = os.path.abspath(output_dir)
-        if os.path.exists(self._output_dir):
-            print(f'{self._benchmark_dir}: output directory {self._output_dir} already exists')
-            self._does_output_dir_exist = True
-        else:
-            print(f'{self._benchmark_dir}: creating a new output directory\n\t{self._output_dir}')
-            self._createNewRunDirectory(self._output_dir)
-            self._does_output_dir_exist = False
+        self._run_dir = Path(run_dir)        
+        self._createNewRunDirectory()
+            
+        self._output_dir = Path(output_dir)        
+        self._createNewOutputDirectory()
 
-        log_file_name = self._output_dir + '/benchmark.log'
+        log_file_name = self._output_dir / 'benchmark.log'
         self._log_file = open(log_file_name, 'w+')
 
     def __del__(self):
@@ -51,21 +50,35 @@ class BenchmarkRun:
             self._log_file.close()
 
     def _assertBenchmarkIsValid(self):
-        if not os.path.exists(self._benchmark_dir):
+        if not self._benchmark_dir.exists():
             sys.exit(f'Error: the benchmark {self._benchmark_dir} was not found.\nDid you spell it correctly?')
 
-    def _createNewRunDirectory(self, new_output_dir: str):
-        print(f'{self._benchmark_dir}: copying the benchmark files')
-        # symlinks are copied as symlinks with symlinks=True
-        shutil.copytree(self._benchmark_dir, new_output_dir, symlinks=True)
+    def _createNewRunDirectory(self):
+        if self._run_dir.exists():
+            print(f'run directory {self._run_dir} already exists')
+        else:
+            print(f'creating a new run directory: copy benchmark files')
+            print(f'\tcopying {self._benchmark_dir} --> {self._run_dir}')
+            # symlinks are copied as symlinks with symlinks=True
+            shutil.copytree(self._benchmark_dir, self._run_dir, symlinks=True)
+    
+    def _createNewOutputDirectory(self, new_output_dir: Path):
+        if self._output_dir.exists():
+            print(f'output directory {self._output_dir} already exists')
+        else:
+            print(f'creating a new output directory\n\t{self._output_dir}')
+            self._output_dir.mkdir(parents=True, exist_ok=True)
 
     def doesOutputDirectoryExist(self):
-        return self._does_output_dir_exist
+        return self._output_dir.exists()
+    
+    def doesRunDirectoryExist(self):
+        return self._run_dir.exists()
 
     # prerun is required, for example, to read input files into the page-cache before run() is invoked
     def prerun(self):
         print(f'{self._benchmark_dir}: prerunning')
-        os.chdir(self._output_dir)
+        os.chdir(self._run_dir)
         pre_run_filename = glob.glob('pre*run.sh')
         if pre_run_filename == []:
             pre_run_filename = 'warmup.sh'
@@ -78,10 +91,13 @@ class BenchmarkRun:
 
         # override the values already in the environment
         environment_variables = os.environ.copy()
-        environment_variables.update({"OMP_NUM_THREADS": str(num_threads),
-            "OMP_THREAD_LIMIT": str(num_threads)})
+        environment_variables.update({
+            "OMP_NUM_THREADS": str(num_threads),
+            "OMP_THREAD_LIMIT": str(num_threads),
+            "MOSMODEL_RUN_OUT_DIR": str(self._output_dir)
+            })
 
-        os.chdir(self._output_dir)
+        os.chdir(self._run_dir)
         p = subprocess.run(shlex.split(submit_command + ' ./run.sh'),
                 env=environment_variables, stdout=self._log_file, stderr=self._log_file)
         return p
@@ -92,7 +108,7 @@ class BenchmarkRun:
         environment_variables = {"OMP_NUM_THREADS": str(num_threads),
                 "OMP_THREAD_LIMIT": str(num_threads)}
         environment_variables.update(os.environ)
-        os.chdir(self._output_dir)
+        os.chdir(self._run_dir)
         self._async_process = subprocess.Popen(shlex.split(submit_command + ' ./run.sh'),
                 stdout=self._log_file, stderr=self._log_file, env=environment_variables)
 
@@ -108,7 +124,7 @@ class BenchmarkRun:
     # postrun is required, for example, to validate the run() outputs
     def postrun(self):
         print(f'{self._benchmark_dir}: postrunning')
-        os.chdir(self._output_dir)
+        os.chdir(self._run_dir)
         post_run_filename = glob.glob('post*run.sh')
         if post_run_filename == []:
             post_run_filename = 'validate.sh'
@@ -120,7 +136,7 @@ class BenchmarkRun:
 
     def clean(self, threshold: int = 1024*1024, exclude_files: list = []):
         print(f'{self._benchmark_dir}: cleaning large files from the output directory')
-        os.chdir(self._output_dir)
+        os.chdir(self._run_dir)
         for root, dirs, files in os.walk('./'):
             for name in files:
                 file_path = os.path.join(root, name)
@@ -170,7 +186,7 @@ if __name__ == "__main__":
     cwd = os.getcwd()
     args = getCommandLineArguments()
     os.chdir(cwd)
-    run = BenchmarkRun(args.benchmark_dir, args.output_dir)
+    run = BenchmarkRun(args.benchmark_dir, args.output_dir, args.output_dir)
     if not run.doesOutputDirectoryExist(): # skip existing directories
         run.prerun()
         if args.timeout:

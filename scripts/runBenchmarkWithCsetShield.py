@@ -17,6 +17,8 @@ def getCommandLineArguments():
             help='delete files larger than this size (in bytes) after the benchmark runs')
     parser.add_argument('-x', '--exclude_files', type=str, nargs='*', default=[],
             help='list of files to not remove')
+    parser.add_argument('-w', '--warmup', action='store_true', default=False,
+            help='run a warmup of the benchmark')
     parser.add_argument('-f', '--force', action='store_true', default=False,
             help='run the benchmark anyway even if the output directory already exists')
     parser.add_argument('benchmark_dir', type=str, help='the benchmark directory, must contain three \
@@ -30,8 +32,13 @@ from runBenchmark import BenchmarkRun
 if __name__ == "__main__":
     args = getCommandLineArguments()
 
-    repeated_runs = [BenchmarkRun(args.benchmark_dir, args.output_dir +'/repeat'+str(i+1) )
+    run_dir = args.output_dir +'/run_dir'
+    repeated_runs = [BenchmarkRun(args.benchmark_dir, run_dir, args.output_dir +'/repeat'+str(i+1) )
             for i in range(args.num_repeats)]
+    # add warmup as a separated run
+    if args.warmup:
+        warmup_run = BenchmarkRun(args.benchmark_dir, run_dir, args.output_dir + '/warmup')
+        repeated_runs = [warmup_run] + repeated_runs
 
     existing_repeat_dirs = 0
     for run in repeated_runs:
@@ -42,9 +49,7 @@ if __name__ == "__main__":
         print('You can use the \'-f\' flag to suppress this message and run the benchmark anyway.')
         exit(0)
 
-#     should_pre_run = any([not run.doesOutputDirectoryExist() for run in repeated_runs])
-#     if should_pre_run:
-#         repeated_runs[0].prerun() # pre_run only once for all repeats
+    # replace prerun with warmup, which runs the benchmark before other runs
 
     cset_shield_cmd = f'sudo -E cset shield --exec {args.submit_command}'
     for run in repeated_runs: # run for each repeat
@@ -52,7 +57,13 @@ if __name__ == "__main__":
         p.check_returncode()
         run.postrun()
 
-    run.clean(args.clean_threshold, args.exclude_files)
+    existing_repeat_dirs = 0
+    for run in repeated_runs:
+        if run.doesOutputDirectoryExist():
+            existing_repeat_dirs += 1
+    # clean only if all output directories exist
+    if existing_repeat_dirs == args.num_repeats:
+        run.clean(args.clean_threshold, args.exclude_files)
 
 
 
