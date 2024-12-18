@@ -36,10 +36,10 @@ class BenchmarkRun:
         self._benchmark_dir = Path(benchmark_dir)
         self._assertBenchmarkIsValid()
 
-        self._run_dir = Path(run_dir)        
+        self._run_dir = Path(run_dir)
         self._createNewRunDirectory()
-            
-        self._output_dir = Path(output_dir)        
+
+        self._output_dir = Path(output_dir)
         self._createNewOutputDirectory()
 
         log_file_name = self._output_dir / 'benchmark.log'
@@ -61,8 +61,8 @@ class BenchmarkRun:
             print(f'\tcopying {self._benchmark_dir} --> {self._run_dir}')
             # symlinks are copied as symlinks with symlinks=True
             shutil.copytree(self._benchmark_dir, self._run_dir, symlinks=True)
-    
-    def _createNewOutputDirectory(self, new_output_dir: Path):
+
+    def _createNewOutputDirectory(self):
         if self._output_dir.exists():
             print(f'output directory {self._output_dir} already exists')
         else:
@@ -71,7 +71,7 @@ class BenchmarkRun:
 
     def doesOutputDirectoryExist(self):
         return self._output_dir.exists()
-    
+
     def doesRunDirectoryExist(self):
         return self._run_dir.exists()
 
