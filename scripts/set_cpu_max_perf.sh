@@ -9,7 +9,7 @@ echo "Setting CPU frequency to maximum..."
 sudo cpupower frequency-set --governor performance
 # sudo cpupower frequency-set --max `cpupower frequency-info -l | grep -oP '\d+\.\d+' | sort -n | tail -1`
 sudo cpupower frequency-set --max `cpupower frequency-info -l | grep -oP '\d+\.?\d*' | sort -n | tail -1`
-for cpu in /sys/devices/system/cpu/cpu*; do
+for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
     echo performance | sudo tee "$cpu/cpufreq/scaling_governor"
 done
 
