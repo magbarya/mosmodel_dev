@@ -38,6 +38,8 @@ RUN_BENCHMARK_WITH_SLURM := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithSlurm.py
 RUN_BENCHMARK_WITH_CSET_SHIELD := $(SCRIPTS_ROOT_DIR)/runBenchmarkWithCsetShield.py
 RUN_WITH_CONDA := $(SCRIPTS_ROOT_DIR)/run_with_conda.sh
 COLLECT_MEMORY_FOOTPRINT := $(SCRIPTS_ROOT_DIR)/collectMemoryFootprint.py
+CREATE_PERF_COMMAND := $(SCRIPTS_ROOT_DIR)/build_perf_command.sh
+export PERF_COMMAND := $(SCRIPTS_ROOT_DIR)/perf_command.txt
 
 ###### global constants
 
@@ -72,7 +74,7 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl cpuset mosalloc
+experiments-prerequisites: perf numactl cpuset mosalloc $(PERF_COMMAND)
 
 PERF_PACKAGES := linux-tools
 KERNEL_VERSION := $(shell uname -r)
@@ -89,6 +91,9 @@ cpuset:
 	$(APT_INSTALL) $@
 	$(CSET_SHIELD_CPUS)
 	$(SET_CPU_MAX_PERF)
+
+$(PERF_COMMAND): $(CREATE_PERF_COMMAND)
+	$< $@
 
 TEST_RUN_MOSALLOC_TOOL := $(SCRIPTS_ROOT_DIR)/testRunMosallocTool.sh
 test-run-mosalloc-tool: $(RUN_MOSALLOC_TOOL) $(MOSALLOC_TOOL)
