@@ -8,21 +8,27 @@ def getCommandLineArguments():
             copy the benchmark files there, and then pre_run, run, and post_run the benchmark. \
             Finally, the script deletes large files (> 1MB) residing in the output directory.')
     parser.add_argument('-n', '--num_threads', type=int, default=4,
-            help='the number of threads (for multi-threaded benchmark)')
+            help='uses this number of threads (for multi-threaded benchmark)')
     parser.add_argument('-r', '--num_repeats', type=int, default=4,
-            help='the number of repetitions (it is recommended to be >= the number of sockets)')
+            help='uses this number of repetitions')
     parser.add_argument('-s', '--submit_command', type=str, default='',
             help='a command that will prefix running the benchmark, e.g., "perf stat --".')
     parser.add_argument('-c', '--clean_threshold', type=int, default=1024*1024,
             help='delete files larger than this size (in bytes) after the benchmark runs')
     parser.add_argument('-x', '--exclude_files', type=str, nargs='*', default=[],
-            help='list of files to not remove')
+            help='do not remove these files')
     parser.add_argument('-w', '--warmup', action='store_true', default=False,
             help='run a warmup of the benchmark')
+    parser.add_argument('-p', '--prefix', type=str, default=None,
+            help='a command line to be used as a prefix for the submit command')
     parser.add_argument('-f', '--force', action='store_true', default=False,
             help='run the benchmark anyway even if the output directory already exists')
     parser.add_argument('benchmark_dir', type=str, help='the benchmark directory, must contain three \
             bash scripts: pre_run.sh, run.sh, and post_run.sh')
+    parser.add_argument('-pre', '--pre_run', action='store_true', default=False,
+            help='run the pre_run script')
+    parser.add_argument('-post', '--post_run', action='store_true', default=False,
+            help='run the post_run script')
     parser.add_argument('output_dir', type=str, help='the output directory which will be created for \
             running the benchmark on a clean slate')
     args = parser.parse_args()
@@ -51,14 +57,20 @@ if __name__ == "__main__":
 
     # replace prerun with warmup, which runs the benchmark before other runs
 
-    cset_shield_cmd = f'sudo -E cset shield --exec {args.submit_command}'
+    run_cmd = args.submit_command
+    if args.prefix is not None:
+        run_cmd = f'{args.prefix} {args.submit_command}'
     for run in repeated_runs: # run for each repeat
+        if args.pre_run:
+            print(f'start pre-running...')
+            run.prerun()
         print('================================================')
         print(f'start producing:\n\t{run._output_dir}')
-        p = run.run(args.num_threads, cset_shield_cmd)
+        p = run.run(args.num_threads, run_cmd)
         p.check_returncode()
-        print(f'start post-running...')
-        run.postrun()
+        if args.post_run:
+            print(f'start post-running...')
+            run.postrun()
         print('================================================')
 
     existing_repeat_dirs = 0

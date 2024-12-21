@@ -98,6 +98,7 @@ class BenchmarkRun:
         environment_variables.update({
             "OMP_NUM_THREADS": str(num_threads),
             "OMP_THREAD_LIMIT": str(num_threads),
+            "OMP_PLACES": "cores",
             "MOSMODEL_RUN_OUT_DIR": str(self._output_dir)
             })
 
