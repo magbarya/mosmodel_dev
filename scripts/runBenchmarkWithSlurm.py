@@ -27,7 +27,7 @@ def getCommandLineArguments():
     return args
 
 import os
-from runBenchmark import BenchmarkRun
+from benchmarkCore import BenchmarkRun
 if __name__ == "__main__":
     args = getCommandLineArguments()
 
