@@ -95,12 +95,14 @@ class BenchmarkRun:
 
         # override the values already in the environment
         environment_variables = os.environ.copy()
-        environment_variables.update({
-            "OMP_NUM_THREADS": str(num_threads),
-            "OMP_THREAD_LIMIT": str(num_threads),
-            "OMP_PLACES": "cores",
-            "MOSMODEL_RUN_OUT_DIR": str(self._output_dir)
-            })
+        environment_variables.update(
+                {
+                    "OMP_NUM_THREADS"       : str(num_threads),
+                    "OMP_THREAD_LIMIT"      : str(num_threads),
+                    "OMP_PLACES"            : "cores",
+                    "OMP_PROC_BIND"         : "true",
+                    "MOSMODEL_RUN_OUT_DIR"  : str(self._output_dir)
+                 })
 
         os.chdir(self._run_dir)
         p = subprocess.run(shlex.split(submit_command + ' ./run.sh'),
