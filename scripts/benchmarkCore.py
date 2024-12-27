@@ -61,7 +61,7 @@ class BenchmarkRun:
             print(f'\t{self._benchmark_dir} --> {self._run_dir}')
             print('******************************************************')
             # symlinks are copied as symlinks with symlinks=True
-            shutil.copytree(self._benchmark_dir, self._run_dir, symlinks=True)
+            shutil.copytree(self._benchmark_dir, self._run_dir, dirs_exist_ok=True, symlinks=True)
 
     def _createNewOutputDirectory(self):
         if self._output_dir.exists():
