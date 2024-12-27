@@ -54,11 +54,12 @@ class BenchmarkRun:
             sys.exit(f'Error: the benchmark {self._benchmark_dir} was not found.\nDid you spell it correctly?')
 
     def _createNewRunDirectory(self):
-        if self._run_dir.exists():
-            print(f'run directory {self._run_dir} already exists')
-        else:
-            print(f'creating a new run directory: copy benchmark files')
-            print(f'\tcopying {self._benchmark_dir} --> {self._run_dir}')
+        run_script = self._run_dir / 'run.sh'
+        if not self._run_dir.exists() or not run_script.exists():
+            print('******************************************************')
+            print(f'*** copy benchmark files to the run directory ***')
+            print(f'\t{self._benchmark_dir} --> {self._run_dir}')
+            print('******************************************************')
             # symlinks are copied as symlinks with symlinks=True
             shutil.copytree(self._benchmark_dir, self._run_dir, symlinks=True)
 
