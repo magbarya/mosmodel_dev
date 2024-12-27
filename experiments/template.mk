@@ -48,6 +48,7 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 		--prefix="sudo -E cset shield --exec" \
 		--num_threads=$$(NUMBER_OF_THREADS) \
 		--num_repeats=$$(NUM_OF_REPEATS) \
+		--warmup \
 		--submit_command "$$(RUN_WITH_CONDA) -- $$(MEASURE_GENERAL_METRICS)  \
 			$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) --debug" \
 			-- $$(BENCHMARK_PATH) $$*
