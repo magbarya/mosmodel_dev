@@ -1,5 +1,5 @@
 MODULE_NAME := experiments/vanilla
-VANILLA_LAYOUTS ?= all_4kb
+VANILLA_LAYOUTS ?= layout_all4kb
 LAYOUTS := $(VANILLA_LAYOUTS)
 
 VANILLA_EXPERIMENT := $(MODULE_NAME)
@@ -11,5 +11,5 @@ include $(EXPERIMENTS_TEMPLATE)
 undefine VANILLA_RUN
 
 $(MODULE_NAME)/clean:
-	rm -rf experiments/vanilla/all_4kb
+	rm -rf experiments/vanilla/layout_all4kb
 

@@ -17,33 +17,36 @@ def getCommandLineArguments():
             help='delete files larger than this size (in bytes) after the benchmark runs')
     parser.add_argument('-x', '--exclude_files', type=str, nargs='*', default=[],
             help='do not remove these files')
-    parser.add_argument('-w', '--warmup', action='store_true', default=False,
-            help='run a warmup of the benchmark')
     parser.add_argument('-p', '--prefix', type=str, default=None,
             help='a command line to be used as a prefix for the submit command')
     parser.add_argument('-f', '--force', action='store_true', default=False,
             help='run the benchmark anyway even if the output directory already exists')
-    parser.add_argument('benchmark_dir', type=str, help='the benchmark directory, must contain three \
-            bash scripts: pre_run.sh, run.sh, and post_run.sh')
     parser.add_argument('-pre', '--pre_run', action='store_true', default=False,
             help='run the pre_run script')
-    parser.add_argument('-post', '--post_run', action='store_true', default=False,
+    parser.add_argument('-post', '--post_run', action='store_true', default=True,
             help='run the post_run script')
-    parser.add_argument('output_dir', type=str, help='the output directory which will be created for \
-            running the benchmark on a clean slate')
+    parser.add_argument('-bench', '--benchmark_dir', type=str, required=True, 
+            help='the benchmark directory, must contain three bash scripts: pre_run.sh, run.sh, and post_run.sh')
+    parser.add_argument('-run', '--run_dir', type=str, required=True,
+            help='the directory which will be created for running the benchmark for all experiments and layouts')
+    parser.add_argument('-out', '--output_dir', type=str, required=True,
+            help='the output directory which will be created for saving the output of the benchmark run')
     args = parser.parse_args()
     return args
 
 from benchmarkCore import BenchmarkRun
+from pathlib import Path
 if __name__ == "__main__":
     args = getCommandLineArguments()
 
-    run_dir = args.output_dir +'/run_dir'
-    repeated_runs = [BenchmarkRun(args.benchmark_dir, run_dir, args.output_dir +'/repeat'+str(i+1) )
+    repeated_runs = [BenchmarkRun(args.benchmark_dir, args.run_dir, args.output_dir +'/repeat'+str(i+1) )
             for i in range(args.num_repeats)]
     # add warmup as a separated run
-    if args.warmup:
-        warmup_run = BenchmarkRun(args.benchmark_dir, run_dir, args.output_dir + '/warmup')
+    warmup_dir = Path(args.run_dir) / 'warmup'
+    warmup_force_file = warmup_dir / '.force'
+    force_warmup_run = warmup_force_file.exists()
+    if force_warmup_run:
+        warmup_run = BenchmarkRun(args.benchmark_dir, args.run_dir, warmup_dir)
         repeated_runs = [warmup_run] + repeated_runs
 
     existing_repeat_dirs = 0
@@ -80,6 +83,10 @@ if __name__ == "__main__":
     # clean only if all output directories exist
     if existing_repeat_dirs == args.num_repeats:
         run.clean(args.clean_threshold, args.exclude_files)
+    # clean warmup .force file to skip running it next time
+    if force_warmup_run:
+        warmup_force_file.unlink()
+        print(f'{warmup_force_file} was deleted to skip warmups for next runs')
 
 
 

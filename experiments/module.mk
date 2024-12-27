@@ -52,6 +52,10 @@ export NUMBER_OF_CORES_PER_SOCKET := $(shell ls -d /sys/devices/system/node/node
 export OMP_NUM_THREADS := $(NUMBER_OF_CORES_PER_SOCKET) 
 export OMP_THREAD_LIMIT := $(OMP_NUM_THREADS) 
 export EXPERIMENTS_ROOT_DIR := $(ROOT_DIR)/$(MODULE_NAME)
+export EXPERIMENTS_RUN_DIR := $(EXPERIMENTS_ROOT_DIR)/run_dir
+
+EXPERIMENTS_WARMUP_DIR := $(EXPERIMENTS_RUN_DIR)/warmup
+WARMUP_FORCE_EXECUTION_FILE := $(EXPERIMENTS_WARMUP_DIR)/.force
 
 CSET_SHIELD_CPUS := $(CSET_SHIELD_CPUS_SCRIPT) $(BOUND_MEMORY_NODE)
 
@@ -73,7 +77,12 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl cpuset mosalloc $(PERF_COMMAND)
+experiments-prerequisites: perf numactl cpuset mosalloc $(PERF_COMMAND) $(WARMUP_FORCE_EXECUTION_FILE)
+
+$(WARMUP_FORCE_EXECUTION_FILE):
+	mkdir -p $(dir $@)
+	echo "Creating $@ file to force running warmup before running the first experiment"
+	touch $@
 
 PERF_PACKAGES := linux-tools
 KERNEL_VERSION := $(shell uname -r)
@@ -105,7 +114,7 @@ CUSTOM_RUN_EXPERIMENT_SCRIPT := $(EXPERIMENTS_ROOT_DIR)/run_benchmark.sh
 CUSTOM_COLLECT_RESULTS_TEMPLATE := $(EXPERIMENTS_ROOT_DIR)/collect_results.sh.template
 CUSTOM_COLLECT_RESULTS_SCRIPT := $(EXPERIMENTS_ROOT_DIR)/collect_results.sh
 
-NUM_OF_REPEATS ?= 4
+NUM_OF_REPEATS ?= 3
 NUMBER_OF_THREADS ?= $(NUMBER_OF_CORES_PER_SOCKET)
 RESULTS_ROOT_DIR := $(ROOT_DIR)/results
 
