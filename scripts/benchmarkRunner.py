@@ -25,7 +25,7 @@ def getCommandLineArguments():
             help='run the pre_run script')
     parser.add_argument('-post', '--post_run', action='store_true', default=True,
             help='run the post_run script')
-    parser.add_argument('-bench', '--benchmark_dir', type=str, required=True, 
+    parser.add_argument('-bench', '--benchmark_dir', type=str, required=True,
             help='the benchmark directory, must contain three bash scripts: pre_run.sh, run.sh, and post_run.sh')
     parser.add_argument('-run', '--run_dir', type=str, required=True,
             help='the directory which will be created for running the benchmark for all experiments and layouts')
@@ -80,9 +80,12 @@ if __name__ == "__main__":
     for run in repeated_runs:
         if run.doesOutputDirectoryExist():
             existing_repeat_dirs += 1
+
+    # SKIP cleaning run_dir since it's now a single directory used for all benchmark runs
     # clean only if all output directories exist
-    if existing_repeat_dirs == args.num_repeats:
-        run.clean(args.clean_threshold, args.exclude_files)
+    # if existing_repeat_dirs == args.num_repeats:
+    #    run.clean(args.clean_threshold, args.exclude_files)
+
     # clean warmup .force file to skip running it next time
     if force_warmup_run:
         warmup_force_file.unlink()
