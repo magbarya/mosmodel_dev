@@ -54,6 +54,9 @@ export OMP_THREAD_LIMIT := $(OMP_NUM_THREADS)
 export EXPERIMENTS_ROOT_DIR := $(ROOT_DIR)/$(MODULE_NAME)
 export EXPERIMENTS_RUN_DIR := $(EXPERIMENTS_ROOT_DIR)/run_dir
 
+include $(EXPERIMENTS_ROOT_DIR)/isol_cpus.mk
+# export ISOLATED_CPUS := $(shell cat /sys/devices/system/cpu/isolated)
+
 EXPERIMENTS_WARMUP_DIR := $(EXPERIMENTS_RUN_DIR)/warmup
 WARMUP_FORCE_EXECUTION_FILE := $(EXPERIMENTS_WARMUP_DIR)/.force
 
