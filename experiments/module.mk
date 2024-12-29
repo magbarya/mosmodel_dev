@@ -60,11 +60,9 @@ include $(EXPERIMENTS_ROOT_DIR)/isol_cpus.mk
 EXPERIMENTS_WARMUP_DIR := $(EXPERIMENTS_RUN_DIR)/warmup
 WARMUP_FORCE_EXECUTION_FILE := $(EXPERIMENTS_WARMUP_DIR)/.force
 
-CSET_SHIELD_CPUS := $(CSET_SHIELD_CPUS_SCRIPT) $(BOUND_MEMORY_NODE)
-
 #### recipes and rules for prerequisites
 
-.PHONY: experiments-prerequisites perf numactl cpuset mosalloc test-run-mosalloc-tool
+.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool
 
 mosalloc: $(MOSALLOC_TOOL)
 $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
@@ -80,7 +78,7 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl cpuset mosalloc $(PERF_COMMAND) $(WARMUP_FORCE_EXECUTION_FILE)
+experiments-prerequisites: perf numactl mosalloc $(PERF_COMMAND) $(WARMUP_FORCE_EXECUTION_FILE)
 
 $(WARMUP_FORCE_EXECUTION_FILE):
 	mkdir -p $(dir $@)
@@ -98,17 +96,22 @@ perf:
 numactl:
 	$(APT_INSTALL) $@
 
-cpuset:
-	$(APT_INSTALL) $@
-	$(CSET_SHIELD_CPUS)
-	$(SET_CPU_MAX_PERF)
-
 $(PERF_COMMAND): $(CREATE_PERF_COMMAND)
 	$< $@
 
 TEST_RUN_MOSALLOC_TOOL := $(SCRIPTS_ROOT_DIR)/testRunMosallocTool.sh
 test-run-mosalloc-tool: $(RUN_MOSALLOC_TOOL) $(MOSALLOC_TOOL)
 	$(TEST_RUN_MOSALLOC_TOOL) $<
+
+ifdef CSET_SHIELD_RUN
+experiments-prerequisites: cpuset
+.PHONY: cpuset
+CSET_SHIELD_CPUS := $(CSET_SHIELD_CPUS_SCRIPT) $(BOUND_MEMORY_NODE)
+cpuset:
+	$(APT_INSTALL) $@
+	$(CSET_SHIELD_CPUS)
+	$(SET_CPU_MAX_PERF)
+endif
 
 #### recipes and rules for creating run_and_collect_results.sh script
 
