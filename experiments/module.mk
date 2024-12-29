@@ -28,6 +28,7 @@ export MOSALLOC_TOOL := $(ROOT_DIR)/mosalloc/src/libmosalloc.so
 
 COLLECT_RESULTS := $(SCRIPTS_ROOT_DIR)/collectResults.py
 CHECK_PARANOID := $(SCRIPTS_ROOT_DIR)/checkParanoid.sh
+CHECK_ISOLATION := $(SCRIPTS_ROOT_DIR)/check_isolated_cpus.sh
 CSET_SHIELD_CPUS_SCRIPT := $(SCRIPTS_ROOT_DIR)/cset_shield_node_cpus.sh
 SET_CPU_MAX_PERF := $(SCRIPTS_ROOT_DIR)/set_cpu_max_perf.sh
 SET_THP := $(SCRIPTS_ROOT_DIR)/setTransparentHugePages.sh
@@ -54,14 +55,12 @@ export OMP_THREAD_LIMIT := $(OMP_NUM_THREADS)
 export EXPERIMENTS_ROOT_DIR := $(ROOT_DIR)/$(MODULE_NAME)
 export EXPERIMENTS_RUN_DIR := $(EXPERIMENTS_ROOT_DIR)/run_dir
 
-include $(EXPERIMENTS_ROOT_DIR)/isol_cpus.mk
-
 EXPERIMENTS_WARMUP_DIR := $(EXPERIMENTS_RUN_DIR)/warmup
 WARMUP_FORCE_EXECUTION_FILE := $(EXPERIMENTS_WARMUP_DIR)/.force
 
 #### recipes and rules for prerequisites
 
-.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool
+.PHONY: experiments-prerequisites perf numactl mosalloc test-run-mosalloc-tool cpu_max_perf
 
 mosalloc: $(MOSALLOC_TOOL)
 $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
@@ -77,7 +76,7 @@ $(MOSALLOC_TOOL): $(MOSALLOC_MAKEFILE)
 $(MOSALLOC_MAKEFILE):
 	git submodule update --init --progress
 
-experiments-prerequisites: perf numactl mosalloc $(PERF_COMMAND) $(WARMUP_FORCE_EXECUTION_FILE)
+experiments-prerequisites: perf numactl mosalloc cpu_max_perf $(PERF_COMMAND) $(WARMUP_FORCE_EXECUTION_FILE)
 
 $(WARMUP_FORCE_EXECUTION_FILE):
 	mkdir -p $(dir $@)
@@ -91,6 +90,9 @@ APT_INSTALL := sudo apt install -y
 perf:
 	$(CHECK_PARANOID)
 	$(APT_INSTALL) "$(PERF_PACKAGES)"
+
+cpu_max_perf:
+	$(SET_CPU_MAX_PERF)
 
 numactl:
 	$(APT_INSTALL) $@
@@ -109,7 +111,9 @@ CSET_SHIELD_CPUS := $(CSET_SHIELD_CPUS_SCRIPT) $(BOUND_MEMORY_NODE)
 cpuset:
 	$(APT_INSTALL) $@
 	$(CSET_SHIELD_CPUS)
-	$(SET_CPU_MAX_PERF)
+else
+check_isolation:
+	$(CHECK_ISOLATION)
 endif
 
 #### recipes and rules for creating run_and_collect_results.sh script
