@@ -47,11 +47,10 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 	$$(TASKSET_PREFIX) $$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) -- sleep 1
 	echo ========== [INFO] start producing: $$@ ==========
 	$$(RUN_BENCHMARK) \
-		--prefix="$$(TASKSET_PREFIX)" \
+		--prefix="$$(MEASURE_GENERAL_METRICS) $$(TASKSET_PREFIX)" \
 		--num_threads=$$(NUMBER_OF_THREADS) \
 		--num_repeats=$$(NUM_OF_REPEATS) \
-		--submit_command "$$(MEASURE_GENERAL_METRICS)  \
-			$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) --debug" \
+		--submit_command "$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) --debug" \
 		--benchmark_dir=$$(BENCHMARK_PATH) \
 		--output_dir=$$* \
 		--run_dir=$$(EXPERIMENTS_RUN_DIR)
