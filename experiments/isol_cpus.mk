@@ -49,7 +49,6 @@ print(' '.join(expanded))" "$(1)"
     for core in $$iso_list; do \
       node_path="$$(readlink -f /sys/devices/system/cpu/cpu$$core/node* 2>/dev/null || true)"; \
       node_id="$${node_path##*node}"; \
-      # If there's no node_path or node_id differs from our target node -> mismatch
       if [ -z "$$node_id" ] || [ "$$node_id" != "$(ISOLATED_MEMORY_NODE)" ]; then \
         node_ok=0; \
         echo "CPU $$core is on node $$node_id, not node $(ISOLATED_MEMORY_NODE)!" 1>&2; \
