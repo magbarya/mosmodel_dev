@@ -40,7 +40,7 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 		--run_dir=$$(EXPERIMENTS_RUN_DIR)
 endef
 
-TASKSET_PREFIX := "taskset --cpu ${ISOLATED_CORES} numactl -m ${ISOLATED_MEMORY_NODE}"
+TASKSET_PREFIX := "taskset --cpu ${ISOLATED_CPUS} numactl -m ${ISOLATED_MEMORY_NODE}"
 define TASKSET_EXPS_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] reserve hugepages before start running: $$@ ==========
