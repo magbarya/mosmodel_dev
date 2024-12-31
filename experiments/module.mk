@@ -156,6 +156,7 @@ $(CUSTOM_RUN_EXPERIMENT_SCRIPT): $(CUSTOM_RUN_EXPERIMENT_TEMPLATE)
 MEMORY_FOOTPRINT_FILE := $(MODULE_NAME)/memory_footprint.csv
 
 $(MEMORY_FOOTPRINT_FILE): | experiments/memory_footprint/layout4kb
+	cp $(EXPERIMENTS_RUN_DIR)/mosalloc*.csv $|/repeat1
 	$(COLLECT_MEMORY_FOOTPRINT) $| --output=$@
 
 $(MODULE_NAME)/clean:
