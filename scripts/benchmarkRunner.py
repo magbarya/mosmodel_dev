@@ -69,11 +69,19 @@ if __name__ == "__main__":
             run.prerun()
         print('================================================')
         print(f'start producing:\n\t{run._output_dir}')
+
         p = run.run(args.num_threads, run_cmd)
         p.check_returncode()
+
+        # move output files to out_dir
+        run.move_files_to_output_dir()
+        # clean out_dir
+        run.clean_output_dir(args.clean_threshold, args.exclude_files)
+
         if args.post_run:
             print(f'start post-running...')
             run.postrun()
+
         print('================================================')
 
     existing_repeat_dirs = 0
@@ -81,12 +89,7 @@ if __name__ == "__main__":
         if run.doesOutputDirectoryExist():
             existing_repeat_dirs += 1
 
-    # SKIP cleaning run_dir since it's now a single directory used for all benchmark runs
-    # clean only if all output directories exist
-    # if existing_repeat_dirs == args.num_repeats:
-    #    run.clean(args.clean_threshold, args.exclude_files)
-
-    # clean warmup .force file to skip running it next time
+    # clean warmup '.force' file to skip running it next time
     if force_warmup_run:
         warmup_force_file.unlink()
         print(f'{warmup_force_file} was deleted to skip warmups for next runs')

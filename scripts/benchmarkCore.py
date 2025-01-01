@@ -42,6 +42,8 @@ class BenchmarkRun:
         self._output_dir = Path(output_dir).absolute()
         self._createNewOutputDirectory()
 
+        self._benchmark_files = set(os.listdir(self._benchmark_dir))
+
         log_file_name = self._output_dir / 'benchmark.log'
         self._log_file = open(log_file_name, 'w+')
 
@@ -63,6 +65,7 @@ class BenchmarkRun:
             # symlinks are copied as symlinks with symlinks=True
             shutil.copytree(self._benchmark_dir, self._run_dir, dirs_exist_ok=True, symlinks=True)
 
+
     def _createNewOutputDirectory(self):
         if self._output_dir.exists():
             print(f'output directory {self._output_dir} already exists')
@@ -74,7 +77,7 @@ class BenchmarkRun:
         # True if it exists, it's a dir, and it contains any items
         perf_out_exists = False
         if self._output_dir.exists() and self._output_dir.is_dir():
-            perf_out_exists = any(f.name == 'perf.out' and f.is_file() for f in self._output_dir.iterdir())
+            perf_out_exists = any((f.name == 'perf.out' or f.name == 'perf.data') and f.is_file() for f in self._output_dir.iterdir())
         return perf_out_exists
 
     def doesRunDirectoryExist(self):
@@ -105,9 +108,13 @@ class BenchmarkRun:
                     "MOSMODEL_RUN_OUT_DIR"  : str(self._output_dir)
                  })
 
+        # change dir to run_dir
         os.chdir(self._run_dir)
+
+        # start running the benchmark
         p = subprocess.run(shlex.split(submit_command + ' ./run.sh'),
                 env=environment_variables, stdout=self._log_file, stderr=self._log_file)
+
         return p
 
     def async_run(self, num_threads, submit_command):
@@ -142,9 +149,21 @@ class BenchmarkRun:
         time.sleep(5)  # seconds
         subprocess.run(post_run_filename, stdout=self._log_file, stderr=self._log_file, check=True)
 
-    def clean(self, threshold: int = 1024*1024, exclude_files: list = []):
-        print(f'{self._benchmark_dir}: cleaning large files from the output directory')
-        os.chdir(self._run_dir)
+    def move_files_to_output_dir(self):
+        # get updated list with all files in the run_dir
+        post_run_files = set(os.listdir(self._run_dir))
+        # get the list of all new files
+        new_files = post_run_files - self._benchmark_files
+        # Move only the new files to the output_dir
+        for item in new_items:
+            src_path = os.path.join(self._run_dir, item)
+            # Check if it's a file (or do similar logic for directories)
+            if os.path.isfile(src_path):
+                shutil.move(src_path, self._output_dir)
+                print(f"Moved: {item} -> {self._output_dir}")
+
+    def clean_dir(self, dir_path, threshold: int = 1024*1024, exclude_files: list = []):
+        os.chdir(dir_path)
         for root, dirs, files in os.walk('./'):
             for name in files:
                 file_path = os.path.join(root, name)
@@ -154,6 +173,17 @@ class BenchmarkRun:
         # sync to clean all pending I/O activity
         os.sync()
 
+    def clean_output_dir(self, threshold: int = 1024*1024, exclude_files: list = []):
+        print(f'{self._benchmark_dir}: cleaning large files from the output directory')
+        self.clean_dir(self._output_dir, threshold, exclude_files)
+
+    def clean_run_dir(self, threshold: int = 1024*1024, exclude_files: list = []):
+        print(f'{self._benchmark_dir}: cleaning large files from the run directory')
+        self.clean_dir(self._run_dir, threshold, exclude_files)
+
+    def clean(self, threshold: int = 1024*1024, exclude_files: list = []):
+        self.clean_run_dir(threshold, exclude_files)
+        self.clean_output_dir(threshold, exclude_files)
 
 def getCommandLineArguments():
     parser = argparse.ArgumentParser(description='This python script runs a single benchmark, \
