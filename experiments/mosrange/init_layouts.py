@@ -22,6 +22,7 @@ class InitLayoutsSelector(Selector):
         num_layouts,
         num_repeats,
         metric_name,
+        metric_coverage,
         debug=False
     ) -> None:
         super().__init__(
@@ -38,6 +39,7 @@ class InitLayoutsSelector(Selector):
             generate_endpoints=True,
             rerun_modified_layouts=False
         )
+        self.metric_coverage = metric_coverage
         # Set the seed for reproducibility (optional)
         random.seed(42)
         self.logger = logging.getLogger(__name__)
