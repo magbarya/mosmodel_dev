@@ -85,22 +85,7 @@ if __name__ == "__main__":
         # clean out_dir
         run.clean_output_dir(args.clean_threshold, args.exclude_files)
 
-        if args.post_run:
-            print(f'start post-running...')
-            run.postrun()
-
-        # clean out_dir
-        #   (should be done after postrun to allow processing output files
-        #    in the run_dir before moving them to the output_dir)
-        run.clean_output_dir(args.clean_threshold, args.exclude_files)
-
->>>>>>> 241060369d31eff56f64ea4560924bacb3434284
         print('================================================')
-
-    existing_repeat_dirs = 0
-    for run in repeated_runs:
-        if run.doesOutputDirectoryExist():
-            existing_repeat_dirs += 1
 
     # clean warmup '.force' file to skip running it next time
     if force_warmup_run:
