@@ -16,7 +16,7 @@ $(MODULE_NAME): $(PEBS_TLB_MISS_TRACE_OUTPUT)
 
 $(PEBS_TLB_MISS_TRACE_OUTPUT): experiments/single_page_size/layouts/layout4kb.csv | experiments-prerequisites 
 	$(RUN_BENCHMARK) --force \
-		--prefix="$(PERF_MEM_RECORD_CMD) --output=$(ROOT_DIR)/$@ --cpu ${ISOLATED_CPUS} -- taskset --cpu ${ISOLATED_CPUS} numactl -m ${ISOLATED_MEMORY_NODE}" \
+		--prefix="$(PERF_MEM_RECORD_CMD) --output=$(ROOT_DIR)/$@ --cpu $(ISOLATED_CPUS) $(SET_TASK_AFFINITY_CMD)" \
 		--num_threads=$(NUMBER_OF_THREADS) \
 		--num_repeats=1 \
 		--exclude_files=$(notdir $@) \

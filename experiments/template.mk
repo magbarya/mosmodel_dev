@@ -12,7 +12,6 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/perf.out: $(EXPERIMENT_DIR)/layouts/$(1)
 		$$(BENCHMARK_PATH) $$*
 endef
 
-CSET_SHIELD_PREFIX=sudo -E cset shield --exec
 define VANILLA_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] start producing: $$@ ==========
@@ -20,27 +19,26 @@ $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts
 		--prefix="$$(CSET_SHIELD_PREFIX)" \
 		--num_threads=$$(NUMBER_OF_THREADS) \
 		--num_repeats=$$(NUM_OF_REPEATS) \
-		--submit_command "$$(RUN_WITH_CONDA) -- $$(MEASURE_GENERAL_METRICS)" \
+		--submit_command "$$(MEASURE_GENERAL_METRICS)" \
 			-- $$(BENCHMARK_PATH) $$*
 endef
 
 define CSET_SHIELD_EXPS_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] reserve hugepages before start running: $$@ ==========
-	$$(CSET_SHIELD_PREFIX) $$(RUN_WITH_CONDA) -- $$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) -- sleep 1
+	$$(CSET_SHIELD_PREFIX) $$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) -- sleep 1
 	echo ========== [INFO] start producing: $$@ ==========
 	$$(RUN_BENCHMARK) \
 		--prefix=$$(CSET_SHIELD_PREFIX) \
 		--num_threads=$$(NUMBER_OF_THREADS) \
 		--num_repeats=$$(NUM_OF_REPEATS) \
-		--submit_command "$$(RUN_WITH_CONDA) -- $$(MEASURE_GENERAL_METRICS)  \
+		--submit_command "$$(MEASURE_GENERAL_METRICS)  \
 			$$(RUN_MOSALLOC_TOOL) --library $$(MOSALLOC_TOOL) -cpf $$(ROOT_DIR)/$$< $$(EXTRA_ARGS_FOR_MOSALLOC) --debug" \
 		--benchmark_dir=$$(BENCHMARK_PATH) \
 		--output_dir=$$* \
 		--run_dir=$$(EXPERIMENTS_RUN_DIR)
 endef
 
-TASKSET_PREFIX=taskset --cpu ${ISOLATED_CPUS} numactl -m ${ISOLATED_MEMORY_NODE}
 define TASKSET_EXPS_template =
 $(EXPERIMENT_DIR)/$(1)/$(2)/perf.out: %/$(2)/perf.out: $(EXPERIMENT_DIR)/layouts/$(1).csv | experiments-prerequisites 
 	echo ========== [INFO] reserve hugepages before start running: $$@ ==========
