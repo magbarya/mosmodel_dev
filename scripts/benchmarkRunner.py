@@ -73,14 +73,17 @@ if __name__ == "__main__":
         p = run.run(args.num_threads, run_cmd)
         p.check_returncode()
 
-        # move output files to out_dir
-        run.move_files_to_output_dir()
-        # clean out_dir
-        run.clean_output_dir(args.clean_threshold, args.exclude_files)
-
         if args.post_run:
             print(f'start post-running...')
             run.postrun()
+
+        # move output files to out_dir
+        #   (should be done after postrun to allow processing output files
+        #    in the run_dir before moving them to the output_dir)
+        run.move_files_to_output_dir()
+
+        # clean out_dir
+        run.clean_output_dir(args.clean_threshold, args.exclude_files)
 
         print('================================================')
 
