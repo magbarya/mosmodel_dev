@@ -156,11 +156,13 @@ class BenchmarkRun:
         new_files = post_run_files - self._benchmark_files
         # Move only the new files to the output_dir
         for item in new_files:
-            src_path = os.path.join(self._run_dir, item)
+            src_path = self._run_dir / item
             # Check if it's a file (or do similar logic for directories)
-            if os.path.isfile(src_path):
-                shutil.move(src_path, self._output_dir)
-                print(f"Moved: {item} -> {self._output_dir}")
+            if src_path.is_file():
+                # override the file if it already exists in the output_dir
+                dest_path = self._output_dir / item
+                shutil.move(src_path, dest_path)
+                print(f"Moved: {item} -> {dest_path}")
 
     def clean_dir(self, dir_path, threshold: int = 1024*1024, exclude_files: list = []):
         os.chdir(dir_path)
