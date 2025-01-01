@@ -1059,7 +1059,7 @@ class MosrangeSelector(Selector):
             f.write(msg)
             f.write('\n')
 
-    
+
     # =================================================================== #
     #   Initial layouts - utilities
     # =================================================================== #
@@ -1147,7 +1147,7 @@ class MosrangeSelector(Selector):
         buckets_weights = [56, 28, 14]
         group = self.fillBuckets(pebs_df, buckets_weights)
         return self.createSubgroups(group)
-   
+
     # (B) initial layouts algorithm: subgroups of four groups similiarly to moselect (3 groups)
     def get_moselect_init_layouts_4_groups(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -1155,7 +1155,7 @@ class MosrangeSelector(Selector):
         buckets_weights = [52, 26, 13, 6.5]
         group = self.fillBuckets(pebs_df, buckets_weights)
         return self.createSubgroups(group)
-    
+
     # (C) initial layouts algorithm: similar to Moselect but fill buckets from large to small
     def get_moselect_init_layouts_H2C_L2S(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -1171,7 +1171,7 @@ class MosrangeSelector(Selector):
         buckets_weights = [56, 28, 14]
         group = self.fillBuckets(pebs_df, buckets_weights, start_from_tail=True, fill_min_buckets_first=True)
         return self.createSubgroups(group)
-    
+
     # (E) initial layouts algorithm: all subgroups of three distinct groups, filled from large to small using pages from cold to hot
     def get_moselect_init_layouts_C2H_L2S(self):
         pebs_df = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -1179,7 +1179,7 @@ class MosrangeSelector(Selector):
         buckets_weights = [56, 28, 14]
         group = self.fillBuckets(pebs_df, buckets_weights, start_from_tail=True, fill_min_buckets_first=False)
         return self.createSubgroups(group)
-    
+
     # (F) initial layouts algorithm: moselect complement
     def get_moselect_distinct_init_layouts(self):
         pebs_df_v1 = self.pebs_df.sort_values('TLB_COVERAGE', ascending=False)
@@ -1201,7 +1201,7 @@ class MosrangeSelector(Selector):
 
         group_v2 = [group_v2_56[0], group_v2_28[0], group_v2_14[0]]
         return self.createSubgroups(group_v2)
-    
+
     # (G/H) initial layouts algorithm:  complement of a given layout
     def get_complement_surrounding_layouts(self, layout, layout_result):
         layout_real_coverage = self.realMetricCoverage(layout_result)
@@ -1280,7 +1280,7 @@ class MosrangeSelector(Selector):
     # =================================================================== #
     #   Multi-selection using different initial layouts algorithms
     # =================================================================== #
-    
+
     def write_init_group_results(self, group_name, group_details, phase):
         results_df, _ = self.collect_results(False)
         results_df = results_df.query(f'layout in {self.phase_layout_names}')
@@ -1323,6 +1323,7 @@ class MosrangeSelector(Selector):
             f.write('\n')
 
     layout_group = 0
+    layout_group_name = None
     def run_with_custom_init_layouts(
         self,
         initial_layouts,
@@ -1332,7 +1333,11 @@ class MosrangeSelector(Selector):
         skip_first_group_convergence=False,
         enforce_convergence=True
         ):
-        layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
+        if MosrangeSelector.layout_group_name is not None:
+            layout_group_name = MosrangeSelector.layout_group_name
+        else:
+            layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
+
         MosrangeSelector.layout_group += 1
 
         self.reset_phase_layout_names()
@@ -1427,21 +1432,27 @@ class MosrangeSelector(Selector):
         shake_budget = max(self.num_layouts//6, 5)
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
+        # MosrangeSelector.layout_group_name = 'LayoutA'
         initial_layouts = self.get_moselect_init_layouts()
         layout_r, _ = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
 
+        # MosrangeSelector.layout_group_name = 'LayoutB'
         initial_layouts = self.get_moselect_init_layouts_4_groups()
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="four groups")
 
+        # MosrangeSelector.layout_group_name = 'LayoutC'
         initial_layouts = self.get_moselect_init_layouts_H2C_L2S()
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect hot-to-cold large-to-small")
 
+        # MosrangeSelector.layout_group_name = 'LayoutD'
         initial_layouts = self.get_moselect_init_layouts_C2H_S2L()
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot small-to-large")
 
+        # MosrangeSelector.layout_group_name = 'LayoutE'
         initial_layouts = self.get_moselect_init_layouts_C2H_L2S()
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot large-to-small")
 
+        # MosrangeSelector.layout_group_name = 'LayoutF'
         layout = layout_r['hugepages']
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="complement moselect")
