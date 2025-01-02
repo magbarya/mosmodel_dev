@@ -10,6 +10,8 @@ endif
 LAYOUTS := $(shell seq 1 $(NUM_LAYOUTS) | tac)
 LAYOUTS := $(addprefix layout,$(LAYOUTS)) 
 
+NUM_OF_REPEATS := $(DEFAULT_NUM_OF_REPEATS)
+
 include $(EXPERIMENTS_VARS_TEMPLATE)
 
 MOSRANGE_METRIC_NAME ?= stlb_misses
