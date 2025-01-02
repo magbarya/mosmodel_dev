@@ -53,8 +53,8 @@ if __name__ == "__main__":
     for run in repeated_runs:
         if run.doesOutputDirectoryExist():
             existing_repeat_dirs += 1
-    if existing_repeat_dirs == args.num_repeats and not args.force:
-        print(f'Skipping the run because output director [{args.output_dir}] already exists.')
+    if existing_repeat_dirs == len(repeated_runs) and not args.force:
+        print(f'Skipping the run because the output directory [{args.output_dir}] already exists.')
         print('You can use the \'-f\' flag to suppress this message and run the benchmark anyway.')
         exit(0)
 
