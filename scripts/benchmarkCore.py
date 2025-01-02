@@ -105,6 +105,7 @@ class BenchmarkRun:
                     "OMP_THREAD_LIMIT"      : str(num_threads),
                     "OMP_PLACES"            : "cores",
                     "OMP_PROC_BIND"         : "true",
+                    "OMP_SCHEDULE"          : "static",
                     "MOSMODEL_RUN_OUT_DIR"  : str(self._output_dir)
                  })
 
