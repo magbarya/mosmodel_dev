@@ -19,6 +19,7 @@ from Utils.selector_utils import Selector
 
 
 class MosrangeSelector(Selector):
+    MAX_SEARCH_TRIALS = 1024
     def __init__(
         self,
         memory_footprint_file,
@@ -67,6 +68,8 @@ class MosrangeSelector(Selector):
         self.logger = logging.getLogger(__name__)
         self.update_metric_values()
         self.debug = debug
+        self.layout_group = 0
+        self.layout_group_name = None
 
         current_file_path = Path(__file__).resolve()
         self.current_directory = current_file_path.parent
@@ -799,8 +802,13 @@ class MosrangeSelector(Selector):
         num_layouts_before = self.last_layout_num
         expected_pebs = self.metric_pebs_coverage
         base_real_coverage = None
+        trials = 0
         while True:
             if self.consumed_budget():
+                return None, None
+            
+            trials += 1
+            if trials > MosrangeSelector.MAX_SEARCH_TRIALS:
                 return None, None
 
             layout, pebs = self.add_pages_to_base_layout(base_layout, add_working_set, None, expected_pebs)
@@ -838,10 +846,15 @@ class MosrangeSelector(Selector):
         base_layout = base_layout_r['hugepages']
         expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
         prev_real = None
+        trials = 0
         while True:
             if self.consumed_budget():
                 return None, None
-
+            
+            trials += 1
+            if trials > MosrangeSelector.MAX_SEARCH_TRIALS:
+                return None, None
+            
             layout, pebs = self.add_pages_to_base_layout(base_layout, add_working_set, remove_working_set, expected_pebs)
             if layout is None or self.layout_exist(layout):
                 self.logger.debug(f"exit - add_pages_to_find_desired_layout() --> None")
@@ -901,8 +914,13 @@ class MosrangeSelector(Selector):
         assert self.realMetricCoverage(next_layout_r) < self.realMetricCoverage(base_layout_r)
         base_layout = base_layout_r['hugepages']
         expected_pebs = self.calc_pebs_coverage_proportion(base_layout_r, next_layout_r)
+        trials = 0
         while True:
             if self.consumed_budget():
+                return None, None
+            
+            trials += 1
+            if trials > MosrangeSelector.MAX_SEARCH_TRIALS:
                 return None, None
 
             layout, pebs = self.remove_pages(base_layout, remove_working_set, expected_pebs)
@@ -1052,7 +1070,9 @@ class MosrangeSelector(Selector):
 
     def log(self, key, val, truncate=False):
         if truncate:
-            self.backup_and_truncate_log(self.log_file_path)
+            # self.backup_and_truncate_log(self.log_file_path)
+            self.logger.warning('log was called with truncate...')
+            assert False
 
         msg = f"{key},{val}"
         with open(self.log_file_path, 'a') as f:
@@ -1305,25 +1325,6 @@ class MosrangeSelector(Selector):
 
         self.reset_phase_layout_names()
 
-    def log_layouts(self, key, truncate=False):
-        log_file_path = self.current_directory / "layouts_log.csv"
-        if truncate:
-            self.backup_and_truncate_log(log_file_path)
-
-        # starting new group
-        if truncate or 'group_details' in key:
-            self.init_group_layouts = []
-        curr_phase_group_layouts = list(set(self.phase_layout_names) - set(self.init_group_layouts))
-        self.init_group_layouts += curr_phase_group_layouts
-
-        val = str(curr_phase_group_layouts)
-        msg = f"{key},{val}"
-        with open(log_file_path, 'a') as f:
-            f.write(msg)
-            f.write('\n')
-
-    layout_group = 0
-    layout_group_name = None
     def run_with_custom_init_layouts(
         self,
         initial_layouts,
@@ -1331,25 +1332,25 @@ class MosrangeSelector(Selector):
         group_details="N/A",
         first_group=False,
         skip_first_group_convergence=False,
-        enforce_convergence=True
+        enforce_convergence=True,
+        layout_group_name=None
         ):
-        if MosrangeSelector.layout_group_name is not None:
-            layout_group_name = MosrangeSelector.layout_group_name
+        if layout_group_name is not None:
+            self.layout_group_name = layout_group_name
         else:
-            layout_group_name = f'Layout{string.ascii_uppercase[MosrangeSelector.layout_group]}'
-
-        MosrangeSelector.layout_group += 1
+            self.layout_group_name = f'Layout{string.ascii_uppercase[self.layout_group]}'
+        self.layout_group += 1
 
         self.reset_phase_layout_names()
         if first_group:
-            self.log(f"points_group", "layout_name", True)
-        self.log(f"{layout_group_name}_group_details", group_details)
+            self.log(f"points_group", "layout_name")
+        self.log(f"{self.layout_group_name}_group_details", group_details)
 
         start_layout_num = self.last_layout_num+1
         start_layout_name = f"layout{start_layout_num}"
-        self.log(f"{layout_group_name}_start_converge" ,start_layout_name)
+        self.log(f"{self.layout_group_name}_start_converge" ,start_layout_name)
         self.logger.info("=====================================================")
-        self.logger.info(f"==> {layout_group_name}: Starting converging")
+        self.logger.info(f"==> {self.layout_group_name}: Starting converging")
 
         if first_group and skip_first_group_convergence:
             left, right = self.find_virtual_surrounding_initial_layouts(initial_layouts)
@@ -1371,10 +1372,10 @@ class MosrangeSelector(Selector):
                 self.logger.warning(f"could not converge yet, increasing the budget by 10 (to: {converge_budget})")
 
 
-        self.logger.info(f"<== {layout_group_name}: Finished converging")
+        self.logger.info(f"<== {self.layout_group_name}: Finished converging")
         self.logger.info("=====================================================")
         end_layout_name = f"layout{self.last_layout_num}"
-        self.log(layout_group_name, end_layout_name)
+        self.log(self.layout_group_name, end_layout_name)
 
         # update required coverage in case we failed to converge in the first group
         if first_group and not enforce_convergence:
@@ -1394,32 +1395,32 @@ class MosrangeSelector(Selector):
             layout, layout_result = self.find_closest_layout_to_required_coverage()
             assert self.is_result_within_target_range(layout_result)
         closest_layout_name = layout_result['layout']
-        self.log(f"{layout_group_name}_converged", closest_layout_name)
+        self.log(f"{self.layout_group_name}_converged", closest_layout_name)
 
-        self.write_init_group_results(layout_group_name, group_details, f'converging_to_{round(self.metric_coverage, 1)}_{self.metric_name}')
+        self.write_init_group_results(self.layout_group_name, group_details, f'converging_to_{round(self.metric_coverage, 1)}_{self.metric_name}')
         self.phase_layout_names = [closest_layout_name]
-        self.write_init_group_results(layout_group_name, group_details, 'converged_layout')
+        self.write_init_group_results(self.layout_group_name, group_details, 'converged_layout')
 
         self.logger.info("=====================================================")
-        self.logger.info(f"Running {layout_group_name} with zero pages")
+        self.logger.info(f"Running {self.layout_group_name} with zero pages")
         self.logger.info("=====================================================")
         tail_pages = self.get_tail_pages(total_threshold=1)
         layout_zeroes = list(set(layout) | set(tail_pages))
         converged_layout_with_zeroes_r = self.run_next_layout(layout_zeroes)
         layout_name = converged_layout_with_zeroes_r['layout']
-        self.log(f"{layout_group_name}_with_zeroes", layout_name)
+        self.log(f"{self.layout_group_name}_with_zeroes", layout_name)
 
-        self.write_init_group_results(layout_group_name, group_details, 'converged_layout_with_all_zero_pages')
+        self.write_init_group_results(self.layout_group_name, group_details, 'converged_layout_with_all_zero_pages')
 
-        self.log(f"{layout_group_name}_start_shake_runtime" ,f"layout{self.last_layout_num+1}")
+        self.log(f"{self.layout_group_name}_start_shake_runtime" ,f"layout{self.last_layout_num+1}")
         self.logger.info("=====================================================")
-        self.logger.info(f"==> {layout_group_name}: Start shaking runtime")
+        self.logger.info(f"==> {self.layout_group_name}: Start shaking runtime")
         self.shake_runtime(layout, shake_budget)
-        self.logger.info(f"<== {layout_group_name}: Finished shaking runtime")
+        self.logger.info(f"<== {self.layout_group_name}: Finished shaking runtime")
         self.logger.info("=====================================================")
-        self.log(f"{layout_group_name}_end_shake_runtime", f"layout{self.last_layout_num}")
+        self.log(f"{self.layout_group_name}_end_shake_runtime", f"layout{self.last_layout_num}")
 
-        self.write_init_group_results(layout_group_name, group_details, 'shaking_runtime')
+        self.write_init_group_results(self.layout_group_name, group_details, 'shaking_runtime')
 
         return layout_result, converged_layout_with_zeroes_r
 
@@ -1432,31 +1433,37 @@ class MosrangeSelector(Selector):
         shake_budget = max(self.num_layouts//6, 5)
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
-        MosrangeSelector.layout_group_name = 'LayoutA'
         initial_layouts = self.get_moselect_init_layouts()
-        layout_r, _ = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
+        layout_r, _ = self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+                                                        group_details="moselect", 
+                                                        first_group=True, 
+                                                        layout_group_name='LayoutA')
 
-        MosrangeSelector.layout_group_name = 'LayoutF'
         layout = layout_r['hugepages']
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
-        self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="complement moselect")
+        self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+                                          group_details="complement moselect", 
+                                          layout_group_name='LayoutF')
 
-        # MosrangeSelector.layout_group_name = 'LayoutD'
         # initial_layouts = self.get_moselect_init_layouts_C2H_S2L()
-        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot small-to-large")
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+        #                                   group_details="moselect cold-to-hot small-to-large", 
+        #                                   layout_group_name = 'LayoutD')
 
-        # MosrangeSelector.layout_group_name = 'LayoutE'
         # initial_layouts = self.get_moselect_init_layouts_C2H_L2S()
-        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot large-to-small")
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+        #                                   group_details="moselect cold-to-hot large-to-small", 
+        #                                   layout_group_name = 'LayoutE')
 
-        # MosrangeSelector.layout_group_name = 'LayoutC'
         # initial_layouts = self.get_moselect_init_layouts_H2C_L2S()
-        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect hot-to-cold large-to-small")
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+        #                                   group_details="moselect hot-to-cold large-to-small", 
+        #                                   layout_group_name = 'LayoutC')
 
-        # MosrangeSelector.layout_group_name = 'LayoutB'
         # initial_layouts = self.get_moselect_init_layouts_4_groups()
-        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="four groups")
-
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, 
+        #                                   group_details="four groups", 
+        #                                   layout_group_name = 'LayoutB')
 
         if self.debug:
             breakpoint()
@@ -1498,5 +1505,6 @@ class MosrangeSelector(Selector):
         # MosrangeSelector.pause()
 
     def run(self):
+        self.backup_and_truncate_log(self.log_file_path)
         self.run_with_different_init_layouts()
 
