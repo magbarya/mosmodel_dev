@@ -1432,30 +1432,31 @@ class MosrangeSelector(Selector):
         shake_budget = max(self.num_layouts//6, 5)
         self.logger.info(f"==> Shaking runtime budget: {shake_budget} <==")
 
-        # MosrangeSelector.layout_group_name = 'LayoutA'
+        MosrangeSelector.layout_group_name = 'LayoutA'
         initial_layouts = self.get_moselect_init_layouts()
         layout_r, _ = self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect", first_group=True)
 
-        # MosrangeSelector.layout_group_name = 'LayoutB'
-        initial_layouts = self.get_moselect_init_layouts_4_groups()
-        self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="four groups")
-
-        # MosrangeSelector.layout_group_name = 'LayoutC'
-        initial_layouts = self.get_moselect_init_layouts_H2C_L2S()
-        self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect hot-to-cold large-to-small")
-
-        # MosrangeSelector.layout_group_name = 'LayoutD'
-        initial_layouts = self.get_moselect_init_layouts_C2H_S2L()
-        self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot small-to-large")
-
-        # MosrangeSelector.layout_group_name = 'LayoutE'
-        initial_layouts = self.get_moselect_init_layouts_C2H_L2S()
-        self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot large-to-small")
-
-        # MosrangeSelector.layout_group_name = 'LayoutF'
+        MosrangeSelector.layout_group_name = 'LayoutF'
         layout = layout_r['hugepages']
         initial_layouts = self.get_complement_surrounding_layouts(layout, layout_r)
         self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="complement moselect")
+
+        # MosrangeSelector.layout_group_name = 'LayoutD'
+        # initial_layouts = self.get_moselect_init_layouts_C2H_S2L()
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot small-to-large")
+
+        # MosrangeSelector.layout_group_name = 'LayoutE'
+        # initial_layouts = self.get_moselect_init_layouts_C2H_L2S()
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect cold-to-hot large-to-small")
+
+        # MosrangeSelector.layout_group_name = 'LayoutC'
+        # initial_layouts = self.get_moselect_init_layouts_H2C_L2S()
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="moselect hot-to-cold large-to-small")
+
+        # MosrangeSelector.layout_group_name = 'LayoutB'
+        # initial_layouts = self.get_moselect_init_layouts_4_groups()
+        # self.run_with_custom_init_layouts(initial_layouts, shake_budget, group_details="four groups")
+
 
         if self.debug:
             breakpoint()
