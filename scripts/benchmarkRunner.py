@@ -36,6 +36,7 @@ def getCommandLineArguments():
 
 from benchmarkCore import BenchmarkRun
 from pathlib import Path
+import time
 if __name__ == "__main__":
     args = getCommandLineArguments()
 
@@ -70,6 +71,8 @@ if __name__ == "__main__":
         print('================================================')
         print(f'start producing:\n\t{run._output_dir}')
 
+        # sleep for 3 seconds before next run
+        time.sleep(3)
         p = run.run(args.num_threads, run_cmd)
         p.check_returncode()
 
