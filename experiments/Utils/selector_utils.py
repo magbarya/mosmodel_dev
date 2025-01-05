@@ -44,6 +44,7 @@ class Selector:
         self.all_2mb_r = None
         self.all_4kb_r = None
         self.load_completed = False
+        self.last_run_layout_counter = 0
         self.__load()
 
     def __load(self):
@@ -469,6 +470,7 @@ class Selector:
                 self.phase_layout_names.append(layout_name)
                 return prev_res
 
+        self.last_run_layout_counter = 0
         self.num_generated_layouts += 1
         self.phase_layout_names.append(layout_name)
         self.write_layout(layout_name, mem_layout)
