@@ -37,8 +37,8 @@ echo "Disable Intel CPU Turbo..."
 echo 1 | sudo tee /sys/devices/system/cpu/intel_pstate/no_turbo
 
 # drop page cache
-echo "Drop caches..."
-echo 3 | sudo tee /proc/sys/vm/drop_caches
+# echo "Drop caches..."
+# echo 3 | sudo tee /proc/sys/vm/drop_caches
 
 # disable watchdog
 echo "Turn off watchdog..."
