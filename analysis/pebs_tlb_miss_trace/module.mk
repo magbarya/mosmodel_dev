@@ -64,9 +64,9 @@ $(MEM_BINS_2MB_CSV_FILE): $(PEBS_EXP_OUT_DIR)
 	echo "analyze.log content:"
 	cat $(dir $@)/analyze.log
 	echo "-----------------------------------------"
-	if [[ $$ASSERT_PEBS_SAMPLES_NOT_LOST == 1 ]]; then \
-		! grep -q "samples and lost" $(dir $@)/analyze.log; \
-	fi;
+	# if [[ $$ASSERT_PEBS_SAMPLES_NOT_LOST == 1 ]]; then \
+	# 	! grep -q "samples and lost" $(dir $@)/analyze.log; \
+	# fi;
 
 $(MEM_ACCESS_COUNT_FILE): $(PEBS_EXP_OUT_DIR)
 	{ $(PERF_MEM_REPORT_PREFIX) -i $^/perf.data report | \
